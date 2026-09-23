@@ -1,19 +1,22 @@
 import { useEffect, useRef } from "react";
-import { Animated, Easing, Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { Animated, Easing, Image, Pressable, Text, View } from "react-native";
 import { openOffer } from "../services/openOffer";
 import { Deal, ImportTaxEstimate } from "../types";
 import { formatElapsed } from "./relativeTime";
-import { currency, kindTheme, palette, useNative } from "./theme";
+import { createThemedStyles, currency, KindTheme, useKindTheme, useNative } from "./theme";
 
 type Props = {
   deal: Deal;
   index: number;
   /** Substitui a etiqueta padrao, para telas com classificacao propria. */
-  highlight?: { label: string; tint: string; soft: string };
+  highlight?: KindTheme;
 };
 
 /** Cartao da oferta, com entrada escalonada para o feed nao aparecer de uma vez. */
 export function DealCard({ deal, index, highlight }: Props) {
+  const styles = useStyles();
+  const kindTheme = useKindTheme();
+
   const enter = useRef(new Animated.Value(0)).current;
   const press = useRef(new Animated.Value(1)).current;
   const theme = highlight ?? kindTheme[deal.kind];
@@ -175,6 +178,8 @@ const describeAge = (deal: Deal) => {
  * ICMS varia por estado e o frete internacional tambem entra na base real.
  */
 function ImportTaxRow({ estimate }: { estimate: ImportTaxEstimate }) {
+  const styles = useStyles();
+
   if (estimate.aboveSimplifiedLimit) {
     return (
       <View style={styles.taxBox}>
@@ -207,7 +212,7 @@ function ImportTaxRow({ estimate }: { estimate: ImportTaxEstimate }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles((palette) => ({
   card: {
     borderRadius: 10,
     backgroundColor: palette.surface,
@@ -268,12 +273,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 8,
-    backgroundColor: palette.ink
+    backgroundColor: palette.selected
   },
   newText: {
     fontSize: 10,
     fontWeight: "900",
-    color: palette.surface
+    color: palette.onSelected
   },
   score: {
     fontSize: 13,
@@ -309,7 +314,7 @@ const styles = StyleSheet.create({
   price: {
     fontSize: 18,
     fontWeight: "900",
-    color: "#0F766E"
+    color: palette.price
   },
   discountGroup: {
     flexDirection: "row",
@@ -321,7 +326,7 @@ const styles = StyleSheet.create({
   },
   oldPrice: {
     fontSize: 12,
-    color: "#64748B",
+    color: palette.inkFaint,
     textDecorationLine: "line-through"
   },
   discount: {
@@ -405,7 +410,7 @@ const styles = StyleSheet.create({
   taxTotal: {
     fontSize: 16,
     fontWeight: "900",
-    color: "#92400E"
+    color: palette.taxInk
   },
   taxTotalLabel: {
     fontSize: 11,
@@ -415,11 +420,11 @@ const styles = StyleSheet.create({
   taxBreakdown: {
     fontSize: 11,
     lineHeight: 15,
-    color: "#78350F"
+    color: palette.taxInkDeep
   },
   taxDisclaimer: {
     fontSize: 10,
-    color: "#A16207",
+    color: palette.taxInkFaint,
     fontVariant: ["tabular-nums"]
   },
   inlineCoupon: {
@@ -440,6 +445,6 @@ const styles = StyleSheet.create({
     marginTop: 10,
     fontSize: 12,
     lineHeight: 17,
-    color: "#526071"
+    color: palette.inkFaint
   }
-});
+}));

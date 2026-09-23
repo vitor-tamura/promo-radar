@@ -1,5 +1,13 @@
 export type DealKind = "promo" | "coupon" | "bug";
 
+export type ThemeName = "light" | "dark";
+/**
+ * Tema escolhido pelo usuario. Mora aqui, e nao na camada de interface, porque e
+ * preferencia guardada junto com as outras: o service worker da extensao le e
+ * grava esse mesmo objeto sem nunca tocar em componente.
+ */
+export type ThemePreference = ThemeName | "system";
+
 export type ScreenKey = "feed" | "aliexpress" | "stores" | "settings";
 
 export type ScanIntervalMinutes = 5 | 10 | 15 | 30 | 60;
@@ -120,6 +128,8 @@ export type AlertSettings = {
   includeUnlistedStores: boolean;
   /** Aliquota de ICMS do seu estado, usada na estimativa de importacao. */
   icmsPercent: number;
+  /** Tema da interface: "system" acompanha o aparelho. */
+  theme: ThemePreference;
 };
 
 export type ProviderStatus = "ok" | "empty" | "failed";

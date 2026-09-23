@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
-import { Animated, Pressable, StyleSheet, Text, View } from "react-native";
+import { Animated, Pressable, Text, View } from "react-native";
 import { Deal } from "../types";
-import { palette, useNative } from "./theme";
+import { createThemedStyles, useNative, usePalette } from "./theme";
 
 export type SortMode = "relevance" | "recent";
 
@@ -35,6 +35,9 @@ type Props = {
 
 /** Alterna a ordem do feed entre melhor oferta e mais recente. */
 export function SortButton({ value, onChange }: Props) {
+  const styles = useStyles();
+  const palette = usePalette();
+
   const isRecent = value === "recent";
   const press = useRef(new Animated.Value(1)).current;
   const select = useRef(new Animated.Value(isRecent ? 1 : 0)).current;
@@ -69,11 +72,11 @@ export function SortButton({ value, onChange }: Props) {
             {
               backgroundColor: select.interpolate({
                 inputRange: [0, 1],
-                outputRange: [palette.surface, palette.ink]
+                outputRange: [palette.surface, palette.selected]
               }),
               borderColor: select.interpolate({
                 inputRange: [0, 1],
-                outputRange: [palette.border, palette.ink]
+                outputRange: [palette.border, palette.selected]
               })
             }
           ]}
@@ -90,6 +93,9 @@ export function SortButton({ value, onChange }: Props) {
 
 /** Relogio desenhado com Views: evita depender de uma fonte de icones. */
 function ClockGlyph({ active }: { active: boolean }) {
+  const styles = useStyles();
+  const palette = usePalette();
+
   const tint = active ? palette.surface : palette.inkSoft;
 
   return (
@@ -100,7 +106,7 @@ function ClockGlyph({ active }: { active: boolean }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles((palette) => ({
   button: {
     height: 34,
     borderRadius: 17,
@@ -116,7 +122,7 @@ const styles = StyleSheet.create({
     color: palette.inkSoft
   },
   labelActive: {
-    color: palette.surface
+    color: palette.onSelected
   },
   clockFace: {
     width: 13,
@@ -142,4 +148,4 @@ const styles = StyleSheet.create({
     top: 5,
     left: 5
   }
-});
+}));

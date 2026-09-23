@@ -1,19 +1,30 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Alert, FlatList, Pressable, Text, View } from "react-native";
 import { AliexpressScanResult, scanAliexpress, WatchedDeal } from "../services/aliexpressRadar";
 import { AnomalyLevel, anomalyLabel } from "../services/anomalyDetector";
 import { isCriticalDeal, notifyCriticalDeal, setupNotifications } from "../services/notificationService";
 import { AlertSettings, ScanProgress } from "../types";
 import { DealCard } from "./DealCard";
 import { ScanStatusPanel } from "./ScanStatusPanel";
-import { palette } from "./theme";
+import { createThemedStyles, KindTheme, usePalette } from "./theme";
 
-/** Cores por nivel: o vermelho fica reservado ao provavel erro de preco. */
-const levelTheme: Record<AnomalyLevel, { label: string; tint: string; soft: string }> = {
-  "price-error": { label: anomalyLabel["price-error"], tint: "#B91C1C", soft: "#FEE2E2" },
-  "far-below": { label: anomalyLabel["far-below"], tint: palette.warn, soft: palette.warnSoft },
-  below: { label: anomalyLabel.below, tint: palette.info, soft: palette.infoSoft },
-  normal: { label: anomalyLabel.normal, tint: palette.inkSoft, soft: palette.track }
+/**
+ * Cores por nivel, montadas a partir da paleta do tema em uso. O vermelho fica
+ * reservado ao provavel erro de preco: e o unico nivel que pede acao imediata.
+ */
+const useLevelTheme = (): Record<AnomalyLevel, KindTheme> => {
+  const palette = usePalette();
+
+  return {
+    "price-error": {
+      label: anomalyLabel["price-error"],
+      tint: palette.dangerStrong,
+      soft: palette.dangerSoft
+    },
+    "far-below": { label: anomalyLabel["far-below"], tint: palette.warn, soft: palette.warnSoft },
+    below: { label: anomalyLabel.below, tint: palette.info, soft: palette.infoSoft },
+    normal: { label: anomalyLabel.normal, tint: palette.inkSoft, soft: palette.track }
+  };
 };
 
 const FILTERS: { value: AnomalyLevel | "flagged"; label: string }[] = [
@@ -35,6 +46,10 @@ type Props = {
  * de desconto: o radar acompanha o preco de tudo e destaca o que saiu do padrao.
  */
 export function AliexpressScreen({ settings }: Props) {
+  const styles = useStyles();
+  const palette = usePalette();
+  const levelTheme = useLevelTheme();
+
   const [deals, setDeals] = useState<WatchedDeal[]>([]);
   const [result, setResult] = useState<AliexpressScanResult>();
   const [isScanning, setIsScanning] = useState(false);
@@ -195,7 +210,7 @@ export function AliexpressScreen({ settings }: Props) {
         disabled={isScanning}
       >
         {isScanning ? (
-          <ActivityIndicator color={palette.surface} size="small" />
+          <ActivityIndicator color={palette.onAccent} size="small" />
         ) : (
           <Text style={styles.scanButtonText}>Rastrear precos do AliExpress</Text>
         )}
@@ -204,7 +219,7 @@ export function AliexpressScreen({ settings }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles((palette) => ({
   screen: {
     flex: 1
   },
@@ -232,7 +247,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: palette.accentSoft,
     borderWidth: 1,
-    borderColor: "#6EE7B7",
+    borderColor: palette.accentBorder,
     padding: 12,
     gap: 3
   },
@@ -243,11 +258,11 @@ const styles = StyleSheet.create({
   },
   summaryText: {
     fontSize: 12,
-    color: "#334155"
+    color: palette.inkOnSoft
   },
   summaryError: {
     fontSize: 11,
-    color: "#9F1239"
+    color: palette.danger
   },
   filterRow: {
     flexDirection: "row",
@@ -268,8 +283,8 @@ const styles = StyleSheet.create({
     backgroundColor: palette.surface
   },
   filterChipActive: {
-    backgroundColor: palette.ink,
-    borderColor: palette.ink
+    backgroundColor: palette.selected,
+    borderColor: palette.selected
   },
   filterText: {
     fontSize: 11,
@@ -277,7 +292,7 @@ const styles = StyleSheet.create({
     color: palette.inkSoft
   },
   filterTextActive: {
-    color: palette.surface
+    color: palette.onSelected
   },
   filterCount: {
     fontSize: 11,
@@ -286,7 +301,7 @@ const styles = StyleSheet.create({
     fontVariant: ["tabular-nums"]
   },
   filterCountActive: {
-    color: "#93C5AF"
+    color: palette.onSelectedSoft
   },
   list: {
     paddingHorizontal: 16,
@@ -326,11 +341,11 @@ const styles = StyleSheet.create({
     justifyContent: "center"
   },
   scanButtonBusy: {
-    backgroundColor: "#0E8F65"
+    backgroundColor: palette.accentPressed
   },
   scanButtonText: {
     fontSize: 14,
     fontWeight: "900",
-    color: palette.surface
+    color: palette.onAccent
   }
-});
+}));

@@ -2,9 +2,9 @@
   "expo": {
     "name": "Promo Radar",
     "slug": "promo-radar",
-    "version": "0.1.0",
+    "version": "0.3.0",
     "orientation": "portrait",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "scheme": "promoradar",
     "icon": "./assets/icon.png",
     "ios": {
@@ -13,7 +13,7 @@
     },
     "android": {
       "package": "com.personal.promoradar",
-      "versionCode": 1,
+      "versionCode": 3,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0B1220"
@@ -34,7 +34,7 @@
       [
         "expo-status-bar",
         {
-          "style": "dark"
+          "style": "auto"
         }
       ],
       "expo-web-browser",

@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
-import { Animated, Easing, Pressable, StyleSheet, Text, View } from "react-native";
+import { Animated, Easing, Pressable, Text, View } from "react-native";
 import { ScanOutcome, ScanProgress } from "../types";
-import { palette, useNative } from "./theme";
+import { createThemedStyles, useNative } from "./theme";
 
 type Props = {
   isScanning: boolean;
@@ -15,6 +15,8 @@ type Props = {
  * esta sendo consultada e, ao final, um resumo do que foi encontrado.
  */
 export function ScanStatusPanel({ isScanning, progress, outcome, onDismiss }: Props) {
+  const styles = useStyles();
+
   const enter = useRef(new Animated.Value(0)).current;
   const fill = useRef(new Animated.Value(0)).current;
   const shimmer = useRef(new Animated.Value(0)).current;
@@ -160,7 +162,7 @@ export function ScanStatusPanel({ isScanning, progress, outcome, onDismiss }: Pr
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles((palette) => ({
   panel: {
     marginHorizontal: 20,
     marginTop: 12,
@@ -175,11 +177,11 @@ const styles = StyleSheet.create({
   },
   panelDone: {
     backgroundColor: palette.accentSoft,
-    borderColor: "#6EE7B7"
+    borderColor: palette.accentBorder
   },
   panelWarn: {
     backgroundColor: palette.warnSoft,
-    borderColor: "#FCD34D"
+    borderColor: palette.warnBorder
   },
   headerRow: {
     flexDirection: "row",
@@ -245,11 +247,11 @@ const styles = StyleSheet.create({
   badgeText: {
     fontSize: 10,
     fontWeight: "900",
-    color: palette.surface
+    color: palette.onAccent
   },
   summaryText: {
     fontSize: 13,
-    color: "#334155"
+    color: palette.inkOnSoft
   },
   chipRow: {
     flexDirection: "row",
@@ -271,10 +273,10 @@ const styles = StyleSheet.create({
   chipText: {
     fontSize: 11,
     fontWeight: "700",
-    color: "#334155"
+    color: palette.inkOnSoft
   },
   errorText: {
     fontSize: 11,
-    color: "#9F1239"
+    color: palette.danger
   }
-});
+}));

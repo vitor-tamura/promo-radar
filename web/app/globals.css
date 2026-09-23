@@ -3,12 +3,36 @@
  * sem margem, sem rolagem propria e com altura real do dispositivo, para que a
  * lista role dentro do app e nao a pagina toda por baixo dele.
  */
+:root {
+  --promo-background: #f7faf9;
+}
+
+/*
+ * Duas fontes decidem o fundo, nesta ordem. O data-theme e escrito pelo app
+ * assim que ele monta e respeita a preferencia guardada, que pode fixar um tema
+ * contra o sistema. Ate la vale o prefers-color-scheme: e o que evita um flash
+ * branco entre abrir a pagina e o bundle desenhar.
+ */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --promo-background: #0b1220;
+  }
+}
+
+:root[data-theme="light"] {
+  --promo-background: #f7faf9;
+}
+
+:root[data-theme="dark"] {
+  --promo-background: #0b1220;
+}
+
 html,
 body {
   margin: 0;
   padding: 0;
   height: 100%;
-  background-color: #f7faf9;
+  background-color: var(--promo-background);
   overscroll-behavior-y: none;
 }
 

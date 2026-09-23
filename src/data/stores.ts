@@ -73,5 +73,7 @@ export const defaultSettings: AlertSettings = {
   blockedTerms: ["usado", "recondicionado"],
   includeUnlistedStores: true,
   // Menor aliquota estadual; ajustavel na tela de alertas.
-  icmsPercent: 17
+  icmsPercent: 17,
+  // Acompanha o aparelho ate alguem dizer o contrario.
+  theme: "system"
 };

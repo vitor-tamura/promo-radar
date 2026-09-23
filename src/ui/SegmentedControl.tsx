@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { Animated, LayoutChangeEvent, Pressable, StyleSheet, Text, View } from "react-native";
-import { palette, useNative } from "./theme";
+import { Animated, LayoutChangeEvent, Pressable, Text, View } from "react-native";
+import { createThemedStyles, useNative } from "./theme";
 
 export type SegmentOption<T extends string> = {
   value: T;
@@ -21,6 +21,8 @@ const TRACK_PADDING = 4;
  * enquanto os rotulos fazem crossfade entre o estado ativo e o inativo.
  */
 export function SegmentedControl<T extends string>({ options, value, onChange }: Props<T>) {
+  const styles = useStyles();
+
   const [trackWidth, setTrackWidth] = useState(0);
   const activeIndex = Math.max(
     0,
@@ -122,7 +124,7 @@ export function SegmentedControl<T extends string>({ options, value, onChange }:
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles((palette) => ({
   track: {
     padding: TRACK_PADDING,
     height: 52,
@@ -172,4 +174,4 @@ const styles = StyleSheet.create({
   countActive: {
     color: palette.accentDeep
   }
-});
+}));

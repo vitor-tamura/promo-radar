@@ -25,7 +25,13 @@ export const viewport: Viewport = {
   // A tela tem listas longas e campos de texto: o zoom do navegador atrapalha
   // mais do que ajuda, mas bloquea-lo de vez prejudicaria quem precisa dele.
   maximumScale: 5,
-  themeColor: "#F7FAF9",
+  // Cor da barra do sistema no PWA instalado. Sao duas porque a escolha e do
+  // sistema ate o app montar; dali em diante ele reescreve a meta com o tema
+  // que estiver valendo, inclusive um fixado pelo usuario.
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#F7FAF9" },
+    { media: "(prefers-color-scheme: dark)", color: "#0B1220" }
+  ],
   // O app desenha ate a borda; o recuo das areas seguras vem do proprio layout.
   viewportFit: "cover"
 };

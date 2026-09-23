@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
-import { Animated, Pressable, ScrollView, StyleSheet, Text } from "react-native";
-import { palette, useNative } from "./theme";
+import { Animated, Pressable, ScrollView, Text } from "react-native";
+import { createThemedStyles, useNative, usePalette } from "./theme";
 
 export const ALL_CATEGORIES = "__all__";
 
@@ -18,6 +18,8 @@ type Props = {
 
 /** Faixa horizontal de categorias: filtra o feed sem ocupar altura da lista. */
 export function CategoryFilter({ options, value, onChange }: Props) {
+  const styles = useStyles();
+
   if (options.length <= 1) {
     return null;
   }
@@ -52,6 +54,9 @@ function CategoryChip({
   active: boolean;
   onPress: () => void;
 }) {
+  const styles = useStyles();
+  const palette = usePalette();
+
   const press = useRef(new Animated.Value(1)).current;
   const select = useRef(new Animated.Value(active ? 1 : 0)).current;
 
@@ -83,11 +88,11 @@ function CategoryChip({
             {
               backgroundColor: select.interpolate({
                 inputRange: [0, 1],
-                outputRange: [palette.surface, palette.ink]
+                outputRange: [palette.surface, palette.selected]
               }),
               borderColor: select.interpolate({
                 inputRange: [0, 1],
-                outputRange: [palette.border, palette.ink]
+                outputRange: [palette.border, palette.selected]
               })
             }
           ]}
@@ -105,7 +110,7 @@ function CategoryChip({
 const CHIP_HEIGHT = 34;
 const ROW_PADDING = 10;
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles((palette) => ({
   track: {
     height: CHIP_HEIGHT + ROW_PADDING * 2,
     flexGrow: 0,
@@ -133,7 +138,7 @@ const styles = StyleSheet.create({
     color: palette.inkSoft
   },
   labelActive: {
-    color: palette.surface
+    color: palette.onSelected
   },
   count: {
     fontSize: 11,
@@ -142,6 +147,6 @@ const styles = StyleSheet.create({
     fontVariant: ["tabular-nums"]
   },
   countActive: {
-    color: "#93C5AF"
+    color: palette.onSelectedSoft
   }
-});
+}));

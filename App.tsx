@@ -11,7 +11,6 @@ import {
   ScrollView,
   FlatList,
   StatusBar as SystemStatusBar,
-  StyleSheet,
   Switch,
   Text,
   TextInput,
@@ -39,7 +38,8 @@ import {
   ScanOutcome,
   ScanProgress,
   ScreenKey,
-  StorePreference
+  StorePreference,
+  ThemePreference
 } from "./src/types";
 import { AliexpressScreen } from "./src/ui/AliexpressScreen";
 import { AppMenu } from "./src/ui/AppMenu";
@@ -51,7 +51,14 @@ import { DealCard } from "./src/ui/DealCard";
 import { ScanStatusPanel } from "./src/ui/ScanStatusPanel";
 import { SegmentedControl } from "./src/ui/SegmentedControl";
 import { confirmDestructive, showMessage } from "./src/ui/dialog";
-import { palette, useNative } from "./src/ui/theme";
+import {
+  applyDocumentTheme,
+  createThemedStyles,
+  palettes,
+  ThemeProvider,
+  useNative,
+  useResolvedTheme
+} from "./src/ui/theme";
 
 const RESULT_PANEL_TIMEOUT_MS = 9000;
 
@@ -63,6 +70,7 @@ const RESULT_PANEL_TIMEOUT_MS = 9000;
 const statusBarInset = Platform.OS === "android" ? (SystemStatusBar.currentHeight ?? 0) : 0;
 
 export default function App() {
+
   const [screen, setScreen] = useState<ScreenKey>("feed");
   const [menuOpen, setMenuOpen] = useState(false);
   const [filter, setFilter] = useState<DealKind | "all">("all");
@@ -193,6 +201,17 @@ export default function App() {
   );
 
   const activeStores = useMemo(() => stores.filter((store) => store.enabled).length, [stores]);
+
+  /**
+   * O App resolve o tema e so entao o oferece a arvore, entao ele mesmo nao pode
+   * le-lo do contexto: pegaria o valor anterior ao proprio provider.
+   */
+  const theme = useResolvedTheme(settings.theme);
+  const styles = useStyles.of(theme);
+  const palette = palettes[theme];
+
+  // No navegador a pagina por baixo do app tambem precisa acompanhar o tema.
+  useEffect(() => applyDocumentTheme(theme), [theme]);
 
   const sourceSummary = useMemo(() => {
     const providers = activeProviders();
@@ -417,386 +436,427 @@ export default function App() {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar style="dark" />
-      <KeyboardAvoidingView
-        behavior={Platform.select({ ios: "padding", android: undefined })}
-        style={styles.container}
-      >
-        <View style={styles.header}>
-          <Pressable
-            style={styles.menuButton}
-            onPress={() => setMenuOpen(true)}
-            accessibilityLabel="Abrir menu"
-            accessibilityRole="button"
-          >
-            <View style={styles.menuLine} />
-            <View style={styles.menuLine} />
-            <View style={styles.menuLine} />
-          </Pressable>
+    // A partir daqui todo componente le o tema do contexto em vez de recebe-lo
+    // como prop: sao dezenas de niveis ate o cartao da oferta.
+    <ThemeProvider value={theme}>
+      <SafeAreaView style={styles.safeArea}>
+        <StatusBar style={theme === "dark" ? "light" : "dark"} />
+        <KeyboardAvoidingView
+          behavior={Platform.select({ ios: "padding", android: undefined })}
+          style={styles.container}
+        >
+          <View style={styles.header}>
+            <Pressable
+              style={styles.menuButton}
+              onPress={() => setMenuOpen(true)}
+              accessibilityLabel="Abrir menu"
+              accessibilityRole="button"
+            >
+              <View style={styles.menuLine} />
+              <View style={styles.menuLine} />
+              <View style={styles.menuLine} />
+            </Pressable>
 
-          <HeaderStatus
-            isScanning={isScanning}
-            screen={screen}
-            dealCount={counts.all}
-            autoScanEnabled={settings.autoScanEnabled}
-            msRemaining={msRemaining}
-          />
-
-          <Pressable
-            style={[styles.scanButton, isScanning && styles.scanButtonBusy]}
-            // Sem o wrapper o evento do toque chegaria como termo de busca.
-            onPress={() => runScan()}
-            disabled={isScanning}
-          >
-            {isScanning ? (
-              <ActivityIndicator color={palette.surface} size="small" />
-            ) : (
-              <Text style={styles.scanButtonText}>Analisar agora</Text>
-            )}
-          </Pressable>
-        </View>
-
-        {screen === "feed" && (
-          <View style={styles.screen}>
-            <ScanStatusPanel
+            <HeaderStatus
               isScanning={isScanning}
-              progress={progress}
-              outcome={outcome}
-              onDismiss={() => setOutcome(undefined)}
+              screen={screen}
+              dealCount={counts.all}
+              autoScanEnabled={settings.autoScanEnabled}
+              msRemaining={msRemaining}
             />
 
-            <SearchBar
-              value={searchDraft}
-              onChangeText={setSearchDraft}
-              onSubmit={() => runScan(searchDraft)}
-              onClear={clearSearch}
-              busy={isScanning}
-            />
-
-            {focusTerm ? (
-              <SearchBanner term={focusTerm} count={counts.all} onDismiss={clearSearch} />
-            ) : null}
-
-            <View style={styles.segmentedWrapper}>
-              <SegmentedControl
-                value={filter}
-                onChange={setFilter}
-                options={[
-                  { value: "all", label: "Todos", count: counts.all },
-                  { value: "promo", label: "Promos", count: counts.promo },
-                  { value: "coupon", label: "Cupons", count: counts.coupon },
-                  { value: "bug", label: "Suspeitos", count: counts.bug }
-                ]}
-              />
-            </View>
-
-            <View style={styles.filterRow}>
-              <View style={styles.filterScroll}>
-                <CategoryFilter options={categoryOptions} value={activeCategory} onChange={setCategory} />
-              </View>
-              <View style={styles.sortWrapper}>
-                <SortButton value={sortMode} onChange={setSortMode} />
-              </View>
-            </View>
-
-            <FlatList
-              data={visibleDeals}
-              keyExtractor={(item) => item.id}
-              contentContainerStyle={styles.listContent}
-              renderItem={({ item, index }) => <DealCard deal={item} index={index} />}
-              ItemSeparatorComponent={() => <View style={styles.itemGap} />}
-              ListEmptyComponent={
-                <View style={styles.emptyState}>
-                  <Text style={styles.emptyTitle}>{emptyState.title}</Text>
-                  <Text style={styles.emptyText}>{emptyState.text}</Text>
-                </View>
-              }
-            />
+            <Pressable
+              style={[styles.scanButton, isScanning && styles.scanButtonBusy]}
+              // Sem o wrapper o evento do toque chegaria como termo de busca.
+              onPress={() => runScan()}
+              disabled={isScanning}
+            >
+              {isScanning ? (
+                <ActivityIndicator color={palette.onAccent} size="small" />
+              ) : (
+                <Text style={styles.scanButtonText}>Analisar agora</Text>
+              )}
+            </Pressable>
           </View>
-        )}
 
-        {screen === "aliexpress" && <AliexpressScreen settings={settings} />}
-
-        {screen === "stores" && (
-          <ScrollView style={styles.screen} contentContainerStyle={styles.scrollContent}>
-            <Text style={styles.sectionTitle}>Lojas</Text>
-            <Text style={styles.helperText}>
-              A varredura cobre o mercado por agregadores de preco, busca direto na Amazon e no KaBuM e acompanha
-              as promocoes do Promobit. Aqui voce escolhe de quais lojas quer receber alerta.
-            </Text>
-            <View style={styles.sourceNote}>
-              <Text style={styles.sourceNoteTitle}>Fontes desta varredura</Text>
-              <Text style={styles.sourceNoteText}>{sourceSummary}</Text>
-            </View>
-
-            <View style={styles.preferenceRow}>
-              <View style={styles.preferenceText}>
-                <Text style={styles.preferenceTitle}>Lojas fora da lista</Text>
-                <Text style={styles.preferenceHint}>
-                  Inclui vendedores menores que aparecerem com o melhor preco.
-                </Text>
-              </View>
-              <Switch
-                value={settings.includeUnlistedStores}
-                onValueChange={(includeUnlistedStores) =>
-                  persistSettings({ includeUnlistedStores })
-                }
-                trackColor={{ true: "#A7F3D0", false: "#D8DEE7" }}
-                thumbColor={settings.includeUnlistedStores ? palette.accent : palette.surface}
+          {screen === "feed" && (
+            <View style={styles.screen}>
+              <ScanStatusPanel
+                isScanning={isScanning}
+                progress={progress}
+                outcome={outcome}
+                onDismiss={() => setOutcome(undefined)}
               />
-            </View>
 
-            <View style={styles.bulkRow}>
-              <Pressable
-                style={styles.bulkButton}
-                onPress={() => persistStores(stores.map((store) => ({ ...store, enabled: true })))}
-              >
-                <Text style={styles.bulkButtonText}>Ativar todas</Text>
-              </Pressable>
-              <Pressable
-                style={styles.bulkButton}
-                onPress={() => persistStores(stores.map((store) => ({ ...store, enabled: false })))}
-              >
-                <Text style={styles.bulkButtonText}>Desativar todas</Text>
-              </Pressable>
-            </View>
+              <SearchBar
+                value={searchDraft}
+                onChangeText={setSearchDraft}
+                onSubmit={() => runScan(searchDraft)}
+                onClear={clearSearch}
+                busy={isScanning}
+              />
 
-            {stores.map((store) => (
-              <View key={store.id} style={styles.storeItem}>
-                <Text style={styles.storeName}>{store.name}</Text>
-                <Switch
-                  value={store.enabled}
-                  onValueChange={(enabled) =>
-                    persistStores(stores.map((item) => (item.id === store.id ? { ...item, enabled } : item)))
-                  }
-                  trackColor={{ true: "#A7F3D0", false: "#D8DEE7" }}
-                  thumbColor={store.enabled ? palette.accent : palette.surface}
+              {focusTerm ? (
+                <SearchBanner term={focusTerm} count={counts.all} onDismiss={clearSearch} />
+              ) : null}
+
+              <View style={styles.segmentedWrapper}>
+                <SegmentedControl
+                  value={filter}
+                  onChange={setFilter}
+                  options={[
+                    { value: "all", label: "Todos", count: counts.all },
+                    { value: "promo", label: "Promos", count: counts.promo },
+                    { value: "coupon", label: "Cupons", count: counts.coupon },
+                    { value: "bug", label: "Suspeitos", count: counts.bug }
+                  ]}
                 />
               </View>
-            ))}
-          </ScrollView>
-        )}
 
-        {screen === "settings" && (
-          <ScrollView style={styles.screen} contentContainerStyle={styles.scrollContent}>
-            <Text style={styles.sectionTitle}>Alertas</Text>
-
-            <View style={styles.preferenceRow}>
-              <View style={styles.preferenceText}>
-                <Text style={styles.preferenceTitle}>Analise automatica</Text>
-                <Text style={styles.preferenceHint}>
-                  {settings.autoScanEnabled
-                    ? `A cada ${formatInterval(settings.autoScanIntervalMinutes)}, com o app aberto.`
-                    : "Desligada. Ative aqui ou pelo menu."}
-                </Text>
+              <View style={styles.filterRow}>
+                <View style={styles.filterScroll}>
+                  <CategoryFilter options={categoryOptions} value={activeCategory} onChange={setCategory} />
+                </View>
+                <View style={styles.sortWrapper}>
+                  <SortButton value={sortMode} onChange={setSortMode} />
+                </View>
               </View>
-              <Switch
-                value={settings.autoScanEnabled}
-                onValueChange={toggleAutoScan}
-                trackColor={{ true: "#A7F3D0", false: "#D8DEE7" }}
-                thumbColor={settings.autoScanEnabled ? palette.accent : palette.surface}
+
+              <FlatList
+                data={visibleDeals}
+                keyExtractor={(item) => item.id}
+                contentContainerStyle={styles.listContent}
+                renderItem={({ item, index }) => <DealCard deal={item} index={index} />}
+                ItemSeparatorComponent={() => <View style={styles.itemGap} />}
+                ListEmptyComponent={
+                  <View style={styles.emptyState}>
+                    <Text style={styles.emptyTitle}>{emptyState.title}</Text>
+                    <Text style={styles.emptyText}>{emptyState.text}</Text>
+                  </View>
+                }
               />
             </View>
+          )}
 
-            {settings.autoScanEnabled ? (
+          {screen === "aliexpress" && <AliexpressScreen settings={settings} />}
+
+          {screen === "stores" && (
+            <ScrollView style={styles.screen} contentContainerStyle={styles.scrollContent}>
+              <Text style={styles.sectionTitle}>Lojas</Text>
+              <Text style={styles.helperText}>
+                A varredura cobre o mercado por agregadores de preco, busca direto na Amazon e no KaBuM e acompanha
+                as promocoes do Promobit. Aqui voce escolhe de quais lojas quer receber alerta.
+              </Text>
+              <View style={styles.sourceNote}>
+                <Text style={styles.sourceNoteTitle}>Fontes desta varredura</Text>
+                <Text style={styles.sourceNoteText}>{sourceSummary}</Text>
+              </View>
+
+              <View style={styles.preferenceRow}>
+                <View style={styles.preferenceText}>
+                  <Text style={styles.preferenceTitle}>Lojas fora da lista</Text>
+                  <Text style={styles.preferenceHint}>
+                    Inclui vendedores menores que aparecerem com o melhor preco.
+                  </Text>
+                </View>
+                <Switch
+                  value={settings.includeUnlistedStores}
+                  onValueChange={(includeUnlistedStores) =>
+                    persistSettings({ includeUnlistedStores })
+                  }
+                  trackColor={{ true: palette.switchOn, false: palette.switchOff }}
+                  thumbColor={settings.includeUnlistedStores ? palette.accent : palette.switchThumb}
+                />
+              </View>
+
+              <View style={styles.bulkRow}>
+                <Pressable
+                  style={styles.bulkButton}
+                  onPress={() => persistStores(stores.map((store) => ({ ...store, enabled: true })))}
+                >
+                  <Text style={styles.bulkButtonText}>Ativar todas</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.bulkButton}
+                  onPress={() => persistStores(stores.map((store) => ({ ...store, enabled: false })))}
+                >
+                  <Text style={styles.bulkButtonText}>Desativar todas</Text>
+                </Pressable>
+              </View>
+
+              {stores.map((store) => (
+                <View key={store.id} style={styles.storeItem}>
+                  <Text style={styles.storeName}>{store.name}</Text>
+                  <Switch
+                    value={store.enabled}
+                    onValueChange={(enabled) =>
+                      persistStores(stores.map((item) => (item.id === store.id ? { ...item, enabled } : item)))
+                    }
+                    trackColor={{ true: palette.switchOn, false: palette.switchOff }}
+                    thumbColor={store.enabled ? palette.accent : palette.switchThumb}
+                  />
+                </View>
+              ))}
+            </ScrollView>
+          )}
+
+          {screen === "settings" && (
+            <ScrollView style={styles.screen} contentContainerStyle={styles.scrollContent}>
+              <Text style={styles.sectionTitle}>Aparencia</Text>
+
               <View style={styles.formPanel}>
-                <Text style={styles.inputLabel}>Intervalo</Text>
+                <Text style={styles.inputLabel}>Tema</Text>
+                <Text style={styles.fieldHint}>
+                  {settings.theme === "system"
+                    ? "Acompanhando o aparelho. Troque aqui para fixar um dos dois."
+                    : `Fixado no tema ${settings.theme === "dark" ? "escuro" : "claro"}, independente do aparelho.`}
+                </Text>
                 <View style={styles.chipRow}>
-                  {scanIntervals.map((value) => (
+                  {themeOptions.map((option) => {
+                    const active = settings.theme === option.value;
+
+                    return (
+                      <Pressable
+                        key={option.value}
+                        style={[styles.chip, active && styles.chipActive]}
+                        onPress={() => persistSettings({ theme: option.value })}
+                        accessibilityRole="radio"
+                        accessibilityState={{ selected: active }}
+                        aria-checked={active}
+                      >
+                        <Text style={[styles.chipText, active && styles.chipTextActive]}>
+                          {option.label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+
+              <Text style={styles.sectionTitle}>Alertas</Text>
+
+              <View style={styles.preferenceRow}>
+                <View style={styles.preferenceText}>
+                  <Text style={styles.preferenceTitle}>Analise automatica</Text>
+                  <Text style={styles.preferenceHint}>
+                    {settings.autoScanEnabled
+                      ? `A cada ${formatInterval(settings.autoScanIntervalMinutes)}, com o app aberto.`
+                      : "Desligada. Ative aqui ou pelo menu."}
+                  </Text>
+                </View>
+                <Switch
+                  value={settings.autoScanEnabled}
+                  onValueChange={toggleAutoScan}
+                  trackColor={{ true: palette.switchOn, false: palette.switchOff }}
+                  thumbColor={settings.autoScanEnabled ? palette.accent : palette.switchThumb}
+                />
+              </View>
+
+              {settings.autoScanEnabled ? (
+                <View style={styles.formPanel}>
+                  <Text style={styles.inputLabel}>Intervalo</Text>
+                  <View style={styles.chipRow}>
+                    {scanIntervals.map((value) => (
+                      <Pressable
+                        key={value}
+                        style={[
+                          styles.chip,
+                          settings.autoScanIntervalMinutes === value && styles.chipActive
+                        ]}
+                        onPress={() => changeInterval(value)}
+                      >
+                        <Text
+                          style={[
+                            styles.chipText,
+                            settings.autoScanIntervalMinutes === value && styles.chipTextActive
+                          ]}
+                        >
+                          {value === 60 ? "1h" : `${value}m`}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                </View>
+              ) : null}
+
+              <View style={styles.preferenceRow}>
+                <View style={styles.preferenceText}>
+                  <Text style={styles.preferenceTitle}>Notificar cupons</Text>
+                  <Text style={styles.preferenceHint}>Codigos de desconto e cashback das lojas.</Text>
+                </View>
+                <Switch
+                  value={settings.notifyCoupons}
+                  onValueChange={(notifyCoupons) => persistSettings({ notifyCoupons })}
+                  trackColor={{ true: palette.switchOn, false: palette.switchOff }}
+                  thumbColor={settings.notifyCoupons ? palette.accent : palette.switchThumb}
+                />
+              </View>
+
+              <View style={styles.preferenceRow}>
+                <View style={styles.preferenceText}>
+                  <Text style={styles.preferenceTitle}>Notificar preco suspeito</Text>
+                  <Text style={styles.preferenceHint}>
+                    Erro de preco sinalizado pela comunidade ou queda acima de 50% no historico.
+                  </Text>
+                </View>
+                <Switch
+                  value={settings.notifyBuggedAds}
+                  onValueChange={(notifyBuggedAds) => persistSettings({ notifyBuggedAds })}
+                  trackColor={{ true: palette.switchOn, false: palette.switchOff }}
+                  thumbColor={settings.notifyBuggedAds ? palette.accent : palette.switchThumb}
+                />
+              </View>
+
+              <View style={styles.formPanel}>
+                <View style={styles.labelRow}>
+                  <Text style={styles.inputLabel}>Faixas de desconto</Text>
+                  {settings.discountTiers.length > 0 ? (
+                    <Pressable onPress={() => persistSettings({ discountTiers: [] })} hitSlop={8}>
+                      <Text style={styles.clearLink}>Limpar</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+                <Text style={styles.fieldHint}>
+                  {settings.discountTiers.length === 0
+                    ? "Nenhuma marcada: qualquer desconto entra no radar."
+                    : `Mostrando so ${settings.discountTiers.map(tierLabel).join(", ")}.`}{" "}
+                  Vale para ofertas com desconto ja apurado. Queda de {CRITICAL_DISCOUNT_PERCENT}% ou mais
+                  sempre alerta, mesmo fora das faixas.
+                </Text>
+                <View style={styles.chipGrid}>
+                  {DISCOUNT_TIERS.map((tier) => {
+                    const active = settings.discountTiers.includes(tier);
+
+                    return (
+                      <Pressable
+                        key={tier}
+                        style={[styles.chip, styles.chipGridItem, active && styles.chipActive]}
+                        onPress={() =>
+                          persistSettings((current) => ({
+                            discountTiers: toggleDiscountTier(current.discountTiers, tier)
+                          }))
+                        }
+                        accessibilityRole="checkbox"
+                        // accessibilityState cobre o nativo; aria-checked, o navegador.
+                        accessibilityState={{ checked: active }}
+                        aria-checked={active}
+                      >
+                        <Text style={[styles.chipText, active && styles.chipTextActive]}>
+                          {tierLabel(tier)}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+
+                <Text style={styles.inputLabel}>O que buscar</Text>
+                <Text style={styles.fieldHint}>
+                  Cada termo vira uma busca em todas as fontes, sem limite pratico de quantidade: quanto mais
+                  termos, mais longa a varredura. Alem deles, a vitrine do Mercado Livre e a curadoria do
+                  Promobit chegam por categoria. Para procurar um produto agora, use a lupa no topo do radar.
+                </Text>
+                <TextInput
+                  value={keywordDraft}
+                  onChangeText={setKeywordDraft}
+                  placeholder="ssd, notebook, smart tv"
+                  placeholderTextColor={palette.muted}
+                  style={styles.input}
+                />
+
+                <Text style={styles.inputLabel}>Termos bloqueados</Text>
+                <TextInput
+                  value={blockedDraft}
+                  onChangeText={setBlockedDraft}
+                  placeholder="usado, recondicionado"
+                  placeholderTextColor={palette.muted}
+                  style={styles.input}
+                />
+
+                <Pressable style={styles.secondaryButton} onPress={updateFilters}>
+                  <Text style={styles.secondaryButtonText}>Salvar filtros</Text>
+                </Pressable>
+              </View>
+
+              <View style={styles.formPanel}>
+                <Text style={styles.inputLabel}>ICMS do seu estado</Text>
+                <Text style={styles.fieldHint}>
+                  Usado na estimativa de imposto dos produtos importados. Ate US$ 50 o Imposto de Importacao e
+                  zero; acima disso, 60% com desconto de US$ 30.
+                </Text>
+                <View style={styles.chipRow}>
+                  {[17, 18, 19, 20].map((value) => (
                     <Pressable
                       key={value}
-                      style={[
-                        styles.chip,
-                        settings.autoScanIntervalMinutes === value && styles.chipActive
-                      ]}
-                      onPress={() => changeInterval(value)}
+                      style={[styles.chip, settings.icmsPercent === value && styles.chipActive]}
+                      onPress={() => persistSettings({ icmsPercent: value })}
                     >
                       <Text
-                        style={[
-                          styles.chipText,
-                          settings.autoScanIntervalMinutes === value && styles.chipTextActive
-                        ]}
+                        style={[styles.chipText, settings.icmsPercent === value && styles.chipTextActive]}
                       >
-                        {value === 60 ? "1h" : `${value}m`}
+                        {value}%
                       </Text>
                     </Pressable>
                   ))}
                 </View>
               </View>
-            ) : null}
 
-            <View style={styles.preferenceRow}>
-              <View style={styles.preferenceText}>
-                <Text style={styles.preferenceTitle}>Notificar cupons</Text>
-                <Text style={styles.preferenceHint}>Codigos de desconto e cashback das lojas.</Text>
-              </View>
-              <Switch
-                value={settings.notifyCoupons}
-                onValueChange={(notifyCoupons) => persistSettings({ notifyCoupons })}
-                trackColor={{ true: "#A7F3D0", false: "#D8DEE7" }}
-                thumbColor={settings.notifyCoupons ? palette.accent : palette.surface}
-              />
-            </View>
-
-            <View style={styles.preferenceRow}>
-              <View style={styles.preferenceText}>
-                <Text style={styles.preferenceTitle}>Notificar preco suspeito</Text>
-                <Text style={styles.preferenceHint}>
-                  Erro de preco sinalizado pela comunidade ou queda acima de 50% no historico.
+              <View style={styles.formPanel}>
+                <Text style={styles.inputLabel}>Historico de precos</Text>
+                <Text style={styles.fieldHint}>
+                  {trackedProducts} produtos acompanhados neste aparelho. E dele que sai o percentual de desconto
+                  real.
                 </Text>
-              </View>
-              <Switch
-                value={settings.notifyBuggedAds}
-                onValueChange={(notifyBuggedAds) => persistSettings({ notifyBuggedAds })}
-                trackColor={{ true: "#A7F3D0", false: "#D8DEE7" }}
-                thumbColor={settings.notifyBuggedAds ? palette.accent : palette.surface}
-              />
-            </View>
-
-            <View style={styles.formPanel}>
-              <View style={styles.labelRow}>
-                <Text style={styles.inputLabel}>Faixas de desconto</Text>
-                {settings.discountTiers.length > 0 ? (
-                  <Pressable onPress={() => persistSettings({ discountTiers: [] })} hitSlop={8}>
-                    <Text style={styles.clearLink}>Limpar</Text>
-                  </Pressable>
-                ) : null}
-              </View>
-              <Text style={styles.fieldHint}>
-                {settings.discountTiers.length === 0
-                  ? "Nenhuma marcada: qualquer desconto entra no radar."
-                  : `Mostrando so ${settings.discountTiers.map(tierLabel).join(", ")}.`}{" "}
-                Vale para ofertas com desconto ja apurado. Queda de {CRITICAL_DISCOUNT_PERCENT}% ou mais
-                sempre alerta, mesmo fora das faixas.
-              </Text>
-              <View style={styles.chipGrid}>
-                {DISCOUNT_TIERS.map((tier) => {
-                  const active = settings.discountTiers.includes(tier);
-
-                  return (
-                    <Pressable
-                      key={tier}
-                      style={[styles.chip, styles.chipGridItem, active && styles.chipActive]}
-                      onPress={() =>
-                        persistSettings((current) => ({
-                          discountTiers: toggleDiscountTier(current.discountTiers, tier)
-                        }))
-                      }
-                      accessibilityRole="checkbox"
-                      // accessibilityState cobre o nativo; aria-checked, o navegador.
-                      accessibilityState={{ checked: active }}
-                      aria-checked={active}
-                    >
-                      <Text style={[styles.chipText, active && styles.chipTextActive]}>
-                        {tierLabel(tier)}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
+                <Pressable style={styles.outlineButton} onPress={resetHistory}>
+                  <Text style={styles.outlineButtonText}>Apagar historico</Text>
+                </Pressable>
               </View>
 
-              <Text style={styles.inputLabel}>O que buscar</Text>
-              <Text style={styles.fieldHint}>
-                Cada termo vira uma busca em todas as fontes, sem limite pratico de quantidade: quanto mais
-                termos, mais longa a varredura. Alem deles, a vitrine do Mercado Livre e a curadoria do
-                Promobit chegam por categoria. Para procurar um produto agora, use a lupa no topo do radar.
-              </Text>
-              <TextInput
-                value={keywordDraft}
-                onChangeText={setKeywordDraft}
-                placeholder="ssd, notebook, smart tv"
-                placeholderTextColor="#7B8794"
-                style={styles.input}
-              />
-
-              <Text style={styles.inputLabel}>Termos bloqueados</Text>
-              <TextInput
-                value={blockedDraft}
-                onChangeText={setBlockedDraft}
-                placeholder="usado, recondicionado"
-                placeholderTextColor="#7B8794"
-                style={styles.input}
-              />
-
-              <Pressable style={styles.secondaryButton} onPress={updateFilters}>
-                <Text style={styles.secondaryButtonText}>Salvar filtros</Text>
-              </Pressable>
-            </View>
-
-            <View style={styles.formPanel}>
-              <Text style={styles.inputLabel}>ICMS do seu estado</Text>
-              <Text style={styles.fieldHint}>
-                Usado na estimativa de imposto dos produtos importados. Ate US$ 50 o Imposto de Importacao e
-                zero; acima disso, 60% com desconto de US$ 30.
-              </Text>
-              <View style={styles.chipRow}>
-                {[17, 18, 19, 20].map((value) => (
-                  <Pressable
-                    key={value}
-                    style={[styles.chip, settings.icmsPercent === value && styles.chipActive]}
-                    onPress={() => persistSettings({ icmsPercent: value })}
-                  >
-                    <Text
-                      style={[styles.chipText, settings.icmsPercent === value && styles.chipTextActive]}
-                    >
-                      {value}%
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-            </View>
-
-            <View style={styles.formPanel}>
-              <Text style={styles.inputLabel}>Historico de precos</Text>
-              <Text style={styles.fieldHint}>
-                {trackedProducts} produtos acompanhados neste aparelho. E dele que sai o percentual de desconto
-                real.
-              </Text>
-              <Pressable style={styles.outlineButton} onPress={resetHistory}>
-                <Text style={styles.outlineButtonText}>Apagar historico</Text>
-              </Pressable>
-            </View>
-
-            <View style={styles.formPanel}>
-              <Text style={styles.inputLabel}>Notificacoes</Text>
-              <Text style={styles.fieldHint}>
-                Erro de preco e queda de {CRITICAL_DISCOUNT_PERCENT}% ou mais sempre geram alerta, um por
-                oferta, mesmo com o app em segundo plano.
-              </Text>
-
-              <Pressable style={styles.outlineButton} onPress={requestNotifications}>
-                <Text style={styles.outlineButtonText}>
-                  {notificationsReady ? "Notificacoes ativas" : "Ativar notificacoes"}
+              <View style={styles.formPanel}>
+                <Text style={styles.inputLabel}>Notificacoes</Text>
+                <Text style={styles.fieldHint}>
+                  Erro de preco e queda de {CRITICAL_DISCOUNT_PERCENT}% ou mais sempre geram alerta, um por
+                  oferta, mesmo com o app em segundo plano.
                 </Text>
-              </Pressable>
 
-              <Pressable style={styles.secondaryButton} onPress={testNotification}>
-                <Text style={styles.secondaryButtonText}>Enviar notificacao de teste</Text>
-              </Pressable>
-            </View>
-          </ScrollView>
-        )}
-      </KeyboardAvoidingView>
+                <Pressable style={styles.outlineButton} onPress={requestNotifications}>
+                  <Text style={styles.outlineButtonText}>
+                    {notificationsReady ? "Notificacoes ativas" : "Ativar notificacoes"}
+                  </Text>
+                </Pressable>
 
-      <AppMenu
-        visible={menuOpen}
-        screen={screen}
-        dealCount={counts.all}
-        storeCount={activeStores}
-        trackedProducts={trackedProducts}
-        autoScanEnabled={settings.autoScanEnabled}
-        interval={settings.autoScanIntervalMinutes}
-        msRemaining={msRemaining}
-        onNavigate={openScreen}
-        onToggleAutoScan={toggleAutoScan}
-        onChangeInterval={changeInterval}
-        onOpenInTab={isPopupSurface ? openAppInTab : undefined}
-        onClose={() => setMenuOpen(false)}
-      />
-    </SafeAreaView>
+                <Pressable style={styles.secondaryButton} onPress={testNotification}>
+                  <Text style={styles.secondaryButtonText}>Enviar notificacao de teste</Text>
+                </Pressable>
+              </View>
+            </ScrollView>
+          )}
+        </KeyboardAvoidingView>
+
+        <AppMenu
+          visible={menuOpen}
+          screen={screen}
+          dealCount={counts.all}
+          storeCount={activeStores}
+          trackedProducts={trackedProducts}
+          autoScanEnabled={settings.autoScanEnabled}
+          interval={settings.autoScanIntervalMinutes}
+          msRemaining={msRemaining}
+          onNavigate={openScreen}
+          onToggleAutoScan={toggleAutoScan}
+          onChangeInterval={changeInterval}
+          onOpenInTab={isPopupSurface ? openAppInTab : undefined}
+          onClose={() => setMenuOpen(false)}
+        />
+      </SafeAreaView>
+    </ThemeProvider>
   );
 }
+
+const themeOptions: { value: ThemePreference; label: string }[] = [
+  { value: "system", label: "Sistema" },
+  { value: "light", label: "Claro" },
+  { value: "dark", label: "Escuro" }
+];
 
 const screenTitles: Record<ScreenKey, string> = {
   feed: "Radar",
@@ -819,6 +879,8 @@ function HeaderStatus({
   autoScanEnabled: boolean;
   msRemaining: number;
 }) {
+  const styles = useStyles();
+
   const pulse = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -887,7 +949,7 @@ function splitTerms(value: string) {
     .filter(Boolean);
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles((palette) => ({
   safeArea: {
     flex: 1,
     backgroundColor: palette.background,
@@ -957,10 +1019,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14
   },
   scanButtonBusy: {
-    backgroundColor: "#0E8F65"
+    backgroundColor: palette.accentPressed
   },
   scanButtonText: {
-    color: palette.surface,
+    color: palette.onAccent,
     fontSize: 13,
     fontWeight: "900"
   },
@@ -1039,7 +1101,7 @@ const styles = StyleSheet.create({
   sourceNoteTitle: {
     fontSize: 12,
     fontWeight: "900",
-    color: "#334155"
+    color: palette.inkOnSoft
   },
   sourceNoteText: {
     fontSize: 12,
@@ -1058,7 +1120,7 @@ const styles = StyleSheet.create({
     height: 48,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: "#D8DEE7",
+    borderColor: palette.switchOff,
     paddingHorizontal: 12,
     fontSize: 14,
     color: palette.ink,
@@ -1068,7 +1130,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
     fontSize: 12,
     fontWeight: "900",
-    color: "#334155"
+    color: palette.inkOnSoft
   },
   fieldHint: {
     marginTop: -4,
@@ -1079,14 +1141,14 @@ const styles = StyleSheet.create({
   secondaryButton: {
     height: 48,
     borderRadius: 8,
-    backgroundColor: palette.ink,
+    backgroundColor: palette.selected,
     alignItems: "center",
     justifyContent: "center"
   },
   secondaryButtonText: {
     fontSize: 14,
     fontWeight: "900",
-    color: palette.surface
+    color: palette.onSelected
   },
   bulkRow: {
     flexDirection: "row",
@@ -1097,7 +1159,7 @@ const styles = StyleSheet.create({
     height: 42,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: "#D8DEE7",
+    borderColor: palette.switchOff,
     backgroundColor: palette.surface,
     alignItems: "center",
     justifyContent: "center"
@@ -1105,7 +1167,7 @@ const styles = StyleSheet.create({
   bulkButtonText: {
     fontSize: 13,
     fontWeight: "800",
-    color: "#334155"
+    color: palette.inkOnSoft
   },
   storeItem: {
     borderRadius: 10,
@@ -1181,7 +1243,7 @@ const styles = StyleSheet.create({
     height: 42,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: "#D8DEE7",
+    borderColor: palette.switchOff,
     alignItems: "center",
     justifyContent: "center"
   },
@@ -1192,7 +1254,7 @@ const styles = StyleSheet.create({
   chipText: {
     fontSize: 13,
     fontWeight: "900",
-    color: "#526071"
+    color: palette.inkFaint
   },
   chipTextActive: {
     color: palette.accentDeep
@@ -1210,4 +1272,4 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     color: palette.ink
   }
-});
+}));

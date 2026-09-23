@@ -1,8 +1,8 @@
 import { useEffect, useRef } from "react";
-import { Animated, Easing, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Animated, Easing, Modal, Pressable, ScrollView, Text, View } from "react-native";
 import { ScanIntervalMinutes, ScreenKey } from "../types";
 import { formatCountdown, formatInterval, scanIntervals } from "./scanInterval";
-import { palette, useNative } from "./theme";
+import { createThemedStyles, useNative } from "./theme";
 
 const PANEL_WIDTH = 300;
 
@@ -46,6 +46,8 @@ export function AppMenu({
   onOpenInTab,
   onClose
 }: Props) {
+  const styles = useStyles();
+
   const slide = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -152,6 +154,8 @@ export function AppMenu({
 }
 
 function Stat({ value, label }: { value: number; label: string }) {
+  const styles = useStyles();
+
   return (
     <View style={styles.stat}>
       <Text style={styles.statValue}>{value}</Text>
@@ -160,7 +164,7 @@ function Stat({ value, label }: { value: number; label: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles((palette) => ({
   overlayRoot: {
     flex: 1
   },
@@ -228,7 +232,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12
   },
   navItemActive: {
-    backgroundColor: palette.ink
+    backgroundColor: palette.selected
   },
   navLabel: {
     fontSize: 16,
@@ -236,7 +240,7 @@ const styles = StyleSheet.create({
     color: palette.ink
   },
   navLabelActive: {
-    color: palette.surface
+    color: palette.onSelected
   },
   navHint: {
     marginTop: 2,
@@ -244,7 +248,7 @@ const styles = StyleSheet.create({
     color: palette.inkSoft
   },
   navHintActive: {
-    color: "#94A3B8"
+    color: palette.muted
   },
   autoGroup: {
     borderTopWidth: 1,
@@ -275,7 +279,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 26,
     borderRadius: 13,
-    backgroundColor: "#D8DEE7",
+    backgroundColor: palette.switchOff,
     padding: 3,
     justifyContent: "center"
   },
@@ -302,7 +306,7 @@ const styles = StyleSheet.create({
     height: 34,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: "#D8DEE7",
+    borderColor: palette.switchOff,
     alignItems: "center",
     justifyContent: "center"
   },
@@ -313,7 +317,7 @@ const styles = StyleSheet.create({
   chipText: {
     fontSize: 12,
     fontWeight: "900",
-    color: "#526071"
+    color: palette.inkFaint
   },
   chipTextActive: {
     color: palette.accentDeep
@@ -331,4 +335,4 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     color: palette.ink
   }
-});
+}));

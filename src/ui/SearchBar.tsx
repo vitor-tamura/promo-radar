@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
-import { ActivityIndicator, Animated, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Animated, Pressable, Text, TextInput, View } from "react-native";
 import { Deal } from "../types";
-import { palette, useNative } from "./theme";
+import { createThemedStyles, useNative, usePalette } from "./theme";
 
 const normalize = (value: string) =>
   value
@@ -30,6 +30,8 @@ export const filterByQuery = (deals: Deal[], query: string) =>
 
 /** Lupa desenhada com Views: um circulo e o cabo, sem dependencia de icones. */
 function MagnifierIcon({ tint }: { tint: string }) {
+  const styles = useStyles();
+
   return (
     <View style={styles.icon}>
       <View style={[styles.iconLens, { borderColor: tint }]} />
@@ -52,6 +54,9 @@ type Props = {
  * ao enviar, manda as fontes procurarem aquele produto especifico.
  */
 export function SearchBar({ value, onChangeText, onSubmit, onClear, busy }: Props) {
+  const styles = useStyles();
+  const palette = usePalette();
+
   const hasText = value.trim().length > 0;
   const press = useRef(new Animated.Value(1)).current;
 
@@ -94,9 +99,9 @@ export function SearchBar({ value, onChangeText, onSubmit, onClear, busy }: Prop
           accessibilityLabel="Varrer promocoes deste produto"
         >
           {busy ? (
-            <ActivityIndicator color={palette.surface} size="small" />
+            <ActivityIndicator color={palette.onSelected} size="small" />
           ) : (
-            <MagnifierIcon tint={hasText ? palette.surface : palette.muted} />
+            <MagnifierIcon tint={hasText ? palette.onSelected : palette.muted} />
           )}
         </Pressable>
       </Animated.View>
@@ -114,6 +119,8 @@ export function SearchBanner({
   count: number;
   onDismiss: () => void;
 }) {
+  const styles = useStyles();
+
   return (
     <View style={styles.banner}>
       <View style={styles.bannerText}>
@@ -133,7 +140,7 @@ export function SearchBanner({
 
 const FIELD_HEIGHT = 38;
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles((palette) => ({
   row: {
     flexDirection: "row",
     alignItems: "center",
@@ -170,7 +177,7 @@ const styles = StyleSheet.create({
     width: FIELD_HEIGHT,
     height: FIELD_HEIGHT,
     borderRadius: FIELD_HEIGHT / 2,
-    backgroundColor: palette.ink,
+    backgroundColor: palette.selected,
     alignItems: "center",
     justifyContent: "center"
   },
@@ -230,4 +237,4 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     color: palette.info
   }
-});
+}));

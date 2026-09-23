@@ -30,6 +30,33 @@ curadoria, que no feed normal passa direto — e as faixas de desconto nao se
 aplicam: se voce pediu o produto, voce quer ver o que existe dele. O resultado
 fica ao lado do feed, e "Voltar ao radar" devolve a lista de antes.
 
+## Tema claro e escuro
+
+Por padrao o app acompanha o aparelho. Em **Alertas › Aparencia** da para fixar
+claro ou escuro, e a escolha vale nos tres alvos, guardada junto com as outras
+preferencias.
+
+O tema escuro nao e o claro invertido. Sobre fundo escuro o acento precisa
+clarear para manter contraste, os tons "soft" deixam de ser pastel e viram fundos
+escuros saturados, e o texto nunca chega ao branco puro, que vibra. Por isso
+`src/ui/theme.ts` nomeia as cores por papel — `selected` e `onSelected` para a
+pilula ativa, `onAccent` para texto sobre o botao verde — em vez de por aparencia.
+A pilula ativa e o caso que obriga a isso: no claro ela e um retangulo quase preto
+com texto branco, e reaproveitar `ink` ali funcionava enquanto so existia um tema;
+no escuro `ink` e a cor do texto, e usa-la como fundo daria pilula branca com
+texto branco.
+
+As folhas de estilo sao montadas uma vez por tema, na carga do modulo, via
+`createThemedStyles`. O `StyleSheet.create` congela as cores no momento em que
+roda, entao uma folha so nunca acompanharia a troca; com as duas prontas, trocar
+de tema nao recria estilo nenhum.
+
+Fora do app, cada alvo precisa pintar o que e dele antes do bundle desenhar,
+senao a tela pisca branca ao abrir no escuro: o popup da extensao tem
+`prefers-color-scheme` no proprio HTML, o app web tem o mesmo no `globals.css` e,
+assim que monta, reescreve `data-theme` e a meta `theme-color` com o tema que
+estiver valendo — inclusive um fixado contra o sistema.
+
 ## Aplicativo web (Vercel)
 
 `web/` e um app Next que serve a mesma interface do aplicativo: nada de
@@ -162,9 +189,18 @@ que aparece ao abrir o popup e o da ultima varredura de segundo plano.
 npm run extension:zip   # gera promo-radar-extensao.zip
 ```
 
-Suba a `version` no `package.json`, gere o ZIP e anexe a um release novo no
-GitHub com esse mesmo nome de arquivo: e o que mantem o link de download acima
-sempre apontando para a versao mais recente. O ZIP nao e versionado no git.
+Suba a `version` no `package.json` — o manifesto da extensao acompanha sozinho —
+gere o ZIP e anexe a um release novo no GitHub com esse mesmo nome de arquivo: e
+o que mantem o link de download acima sempre apontando para a versao mais
+recente. O ZIP nao e versionado no git.
+
+O arquivo e montado por `scripts/zip.mjs`, escrito a mao, sem depender de
+ferramenta do sistema. Nenhuma serve nos tres lugares onde o projeto e
+empacotado: o `zip` nao vem no Windows, e o `Compress-Archive` do PowerShell 5.1,
+que vem, grava os caminhos com barra invertida. A especificacao do ZIP pede barra
+normal, e quem baixasse o release e descompactasse fora do Windows receberia
+arquivos chamados `bundle\static\js\...` em vez de pastas — uma extensao que nao
+carrega, e so para quem baixou.
 
 ## APK Android
 
