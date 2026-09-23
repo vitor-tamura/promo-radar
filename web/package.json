@@ -16,10 +16,10 @@
     "react-native-web": "^0.21.2"
   },
   "devDependencies": {
+    "@types/chrome": "^0.2.2",
     "@types/node": "^22.10.2",
     "@types/react": "~19.2.0",
     "@types/react-dom": "~19.2.0",
-    "typescript": "~5.9.3",
-    "@types/chrome": "^0.2.2"
+    "typescript": "~5.9.3"
   }
 }

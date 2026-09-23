@@ -3,6 +3,7 @@ import { dirname, resolve } from "node:path";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "..");
+const webModules = resolve(here, "node_modules");
 
 /**
  * O app web e o mesmo codigo do aplicativo, servido pelo Next.
@@ -25,10 +26,25 @@ const nextConfig = {
   },
   transpilePackages: ["react-native-web", "@react-native-async-storage/async-storage"],
   webpack: (config) => {
+    /**
+     * App.tsx e src/ moram na raiz do projeto, e um import sem caminho ali e
+     * procurado subindo a arvore a partir dali — onde web/node_modules nunca
+     * aparece. Na sua maquina isso passa despercebido, porque a raiz tambem tem
+     * um node_modules instalado; num deploy com Root Directory em web/, que e so
+     * o que a Vercel instala, nada resolve. Declarar a pasta aqui vale para
+     * qualquer arquivo, inclusive os de fora deste diretorio.
+     */
+    config.resolve.modules = [webModules, ...(config.resolve.modules ?? ["node_modules"])];
+
     config.resolve.alias = {
       ...config.resolve.alias,
-      "react-native$": "react-native-web",
-      "react-native/Libraries/Image/AssetRegistry$": "react-native-web/dist/modules/AssetRegistry",
+      // Caminhos absolutos pelo mesmo motivo: o destino do alias tambem seria
+      // procurado a partir de quem importou.
+      "react-native$": resolve(webModules, "react-native-web"),
+      "react-native/Libraries/Image/AssetRegistry$": resolve(
+        webModules,
+        "react-native-web/dist/modules/AssetRegistry"
+      ),
       // Modulos nativos do Expo que o app importa mas nao usa no navegador.
       "expo-status-bar$": resolve(here, "shims/expo-status-bar.tsx"),
       "expo-notifications$": resolve(here, "shims/expo-notifications.ts"),

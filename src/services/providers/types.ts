@@ -61,18 +61,42 @@ export const readNextData = (html: string): unknown => {
 };
 
 const HTML_ENTITIES: Record<string, string> = {
-  "&quot;": '"',
-  "&apos;": "'",
-  "&#39;": "'",
-  "&amp;": "&",
-  "&lt;": "<",
-  "&gt;": ">",
-  "&nbsp;": " "
+  quot: '"',
+  apos: "'",
+  amp: "&",
+  lt: "<",
+  gt: ">",
+  nbsp: " "
 };
 
-/** Titulos chegam com entidades HTML escapadas tanto no JSON quanto no markup. */
+const MAX_CODE_POINT = 0x10ffff;
+
+/**
+ * Titulos chegam com entidades HTML escapadas tanto no JSON quanto no markup, e
+ * cada fonte prefere uma forma: o Mercado Livre escreve a aspa de polegada como
+ * &#x27; (hexadecimal), outras como &#39; (decimal) ou &apos;. As duas formas
+ * numericas entram por uma regra so, em vez de virarem lista.
+ *
+ * Nomeadas e numericas sao trocadas na mesma passada de proposito: decodificar
+ * &amp; antes faria "&amp;#39;", que descreve o texto literal "&#39;", virar uma
+ * aspa.
+ */
 export const decodeEntities = (value: string) =>
-  value.replace(/&(?:quot|apos|#39|amp|lt|gt|nbsp);/g, (match) => HTML_ENTITIES[match] ?? match);
+  value.replace(/&(?:([a-z]+)|#(x[\da-f]+|\d+));/gi, (match, name?: string, code?: string) => {
+    if (name) {
+      return HTML_ENTITIES[name.toLowerCase()] ?? match;
+    }
+
+    if (!code) {
+      return match;
+    }
+
+    const point = code[0]?.toLowerCase() === "x" ? parseInt(code.slice(1), 16) : Number(code);
+
+    return Number.isFinite(point) && point > 0 && point <= MAX_CODE_POINT
+      ? String.fromCodePoint(point)
+      : match;
+  });
 
 /** Converte "1.614,90" (e variantes com R$) para 1614.9. */
 export const parseBrlNumber = (value: string | undefined): number | undefined => {

@@ -25,10 +25,29 @@ export function PromoRadarApp() {
     setMounted(true);
   }, []);
 
-  // O service worker guarda o casco do app. Sem ele o atalho na tela de inicio
-  // abriria uma pagina em branco toda vez que o celular ficasse sem sinal.
+  /**
+   * O service worker guarda o casco do app. Sem ele o atalho na tela de inicio
+   * abriria uma pagina em branco toda vez que o celular ficasse sem sinal.
+   *
+   * So em producao, e isso nao e preferencia: o cache serve os arquivos de
+   * /_next/static/ direto, o que e seguro porque o build poe um hash no nome de
+   * cada um. Em desenvolvimento o Next serve "page.js" sem hash, entao a mesma
+   * regra congelaria a primeira versao carregada e nenhuma alteracao apareceria
+   * mais no navegador.
+   */
   useEffect(() => {
     if (!("serviceWorker" in navigator)) {
+      return;
+    }
+
+    if (process.env.NODE_ENV !== "production") {
+      // Quem ja rodou uma build de producao nesta origem tem um worker instalado
+      // servindo bundle velho; sem remove-lo, o modo de desenvolvimento fica preso.
+      navigator.serviceWorker
+        .getRegistrations()
+        .then((registrations) => registrations.forEach((registration) => registration.unregister()))
+        .catch(() => undefined);
+
       return;
     }
 

@@ -61,12 +61,34 @@ ainda mostra o feed da ultima varredura. O historico de precos e as preferencias
 ficam no armazenamento do navegador, presos aquela origem — trocar de dominio
 equivale a comecar do zero.
 
+O service worker so e registrado em producao. Ele serve o que esta em
+`/_next/static/` direto do cache, o que e seguro porque o build poe um hash no
+nome de cada arquivo; em desenvolvimento o Next serve `page.js` sem hash, e a
+mesma regra congelaria a primeira versao carregada — nenhuma alteracao apareceria
+mais no navegador. Em modo de desenvolvimento o app remove qualquer worker que ja
+esteja instalado naquela origem, para quem rodou uma build de producao antes nao
+ficar preso.
+
 ### Publicar
 
 Importe o repositorio na Vercel e defina **Root Directory** como `web`. Deixe
 ligada a opcao de incluir arquivos de fora do Root Directory, que vem ligada por
-padrao: o app importa `App.tsx` e `src/` da raiz do projeto. O resto — framework,
-comando de build — a Vercel detecta sozinha.
+padrao: o app importa `App.tsx` e `src/` da raiz do projeto. O resto vem do
+`web/vercel.json`.
+
+O ponto que quebra um deploy ingenuo esta la: o comando de instalacao e
+`npm install --prefix .. && npm install`, os dois. Um import sem caminho dentro de
+`App.tsx` e procurado subindo a arvore a partir da raiz do projeto, onde
+`web/node_modules` nunca aparece — instalar so `web/` deixa a interface
+compartilhada sem nada para resolver, e a build para em
+`Module not found: Can't resolve 'react-native'`. Na sua maquina isso passa
+despercebido porque a raiz tambem tem um `node_modules` instalado.
+
+Por isso a raiz e instalada junto, o que custa cerca de um minuto a mais por
+build. O `next.config.mjs` ainda declara `web/node_modules` em `resolve.modules`
+e usa caminhos absolutos nos alias, para o empacotamento nao depender de onde o
+arquivo que importou esta; a checagem de tipos, que resolve modulos por conta
+propria, e quem realmente precisa da raiz instalada.
 
 ## Extensao do Chrome
 

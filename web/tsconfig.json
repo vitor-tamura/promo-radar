@@ -21,7 +21,18 @@
       {
         "name": "next"
       }
-    ]
+    ],
+    "paths": {
+      "expo-status-bar": [
+        "./shims/expo-status-bar.tsx"
+      ],
+      "expo-notifications": [
+        "./shims/expo-notifications.ts"
+      ],
+      "expo-web-browser": [
+        "./shims/expo-web-browser.ts"
+      ]
+    }
   },
   "include": [
     "next-env.d.ts",

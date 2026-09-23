@@ -21,6 +21,7 @@ dist-apk/
 web/.next/
 web/out/
 web/next-env.d.ts
+web/tsconfig.tsbuildinfo
 .vercel/
 
 # projeto nativo, recriado por `npx expo prebuild`

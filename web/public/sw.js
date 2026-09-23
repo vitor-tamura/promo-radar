@@ -48,7 +48,9 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Arquivo do build tem hash no nome: se esta no cache, e exatamente o pedido.
+  // Arquivo do build tem hash no nome, entao o que esta no cache e exatamente o
+  // que foi pedido. Vale porque este worker so e registrado em producao: os
+  // nomes sem hash que o modo de desenvolvimento serve ficariam presos aqui.
   if (isStaticAsset(url)) {
     event.respondWith(
       caches.match(request).then(
