@@ -33,15 +33,25 @@ parede de falhas.
 Duas fontes nao aceitam termo de busca e entram por categoria, escolhida a partir
 das suas tags: a vitrine de ofertas do Mercado Livre, que bloqueia a leitura da
 busca por palavra, e as secoes do Promobit, que trazem a garimpagem da
-comunidade. O Promobit tambem atende tag por tag, pela mesma API que a busca do
-site usa.
+comunidade. O Promobit tambem atende tag por tag, pela API de busca do
+site — mas pelo endpoint certo: ha um que e a caixa de sugestao, devolve cinco
+itens e ignora paginacao (para "ssd" ele anuncia 94 ofertas e entrega 5), e outro
+que e a busca de verdade, com 20 por pagina. O radar usa o segundo, ate tres
+paginas por termo.
 
 A **lupa**, no topo do radar, faz as duas coisas: enquanto voce digita, recorta o
 que ja esta na tela; ao enviar, dispara uma varredura dirigida aquele produto.
 Nessa varredura nada entra sem casar com todas as palavras do termo — nem a
 curadoria, que no feed normal passa direto — e as faixas de desconto nao se
-aplicam: se voce pediu o produto, voce quer ver o que existe dele. O resultado
+aplicam: se voce pediu o produto, voce quer ver o que existe dele. As lojas
+ligadas tambem sao visitadas, pelo mesmo motivo da varredura normal. O resultado
 fica ao lado do feed, e "Voltar ao radar" devolve a lista de antes.
+
+Quanto a visita as lojas rende na busca dirigida depende do termo, e vale saber:
+medindo, "notebook" passou de 11 para 16 lojas e de 115 para 127 ofertas, em 2,1s
+no lugar de 0,7s; ja "ssd nvme" nao ganhou nada — as mesmas 32 ofertas e 3 lojas —
+e levou 4,2s no lugar de 1,0s. Termo estreito raramente casa com a vitrine de uma
+loja; termo largo casa bastante.
 
 ## Tema claro e escuro
 

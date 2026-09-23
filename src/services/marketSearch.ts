@@ -117,19 +117,21 @@ const buildTasks = ({ keywords, focusTerm, stores = [] }: MarketSearchRequest): 
   const term = focusTerm?.trim();
   const storeTargets = canScanStores() ? stores : [];
 
+  const storeSpecs = (provider: SearchProvider): SearchTaskSpec[] =>
+    storeTargets.length > 0 ? (provider.buildStoreTasks?.(storeTargets) ?? []) : [];
+
   /**
-   * Busca dirigida nao varre loja: quem procura um produto quer o produto, e a
-   * vitrine de vinte lojas so atrasaria a resposta.
+   * As lojas escolhidas entram nos dois modos. Na busca dirigida elas sao o
+   * unico caminho para as lojas que nenhuma fonte indexa: sem a visita, procurar
+   * um produto devolveria so o que Buscape, Zoom e a busca do Promobit conhecem,
+   * e as demais lojas ficariam de fora mesmo tendo o produto em promocao.
    */
   const specsFor = (provider: SearchProvider): SearchTaskSpec[] => {
-    if (term) {
-      return (provider.buildFocusTasks ?? ((value: string) => provider.buildTasks([value])))(term);
-    }
+    const base = term
+      ? (provider.buildFocusTasks ?? ((value: string) => provider.buildTasks([value])))(term)
+      : provider.buildTasks(cleanTerms(keywords));
 
-    return [
-      ...provider.buildTasks(cleanTerms(keywords)),
-      ...(storeTargets.length > 0 ? (provider.buildStoreTasks?.(storeTargets) ?? []) : [])
-    ];
+    return [...base, ...storeSpecs(provider)];
   };
 
   return interleave(

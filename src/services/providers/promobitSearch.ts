@@ -6,12 +6,21 @@ import { decodeEntities, sanitizeListPrice } from "./types";
  * Busca do Promobit.
  *
  * A pagina /buscar monta o resultado no navegador: o HTML entregue vem vazio, so
- * com o termo. Quem responde de verdade e a API publica que a propria pagina
- * consulta, e ela devolve num pedido so as ofertas ativas e os cupons que casam
- * com o termo. E por aqui que a curadoria deixa de depender de categoria e passa
- * a atender tag por tag.
+ * com o termo. Quem responde e a API publica que a propria pagina consulta.
+ *
+ * Sao dois endpoints parecidos, e a diferenca importa. O /search e a caixa de
+ * sugestao do site: devolve cinco itens de cada tipo e ignora qualquer parametro
+ * de paginacao — para "ssd" ele anuncia 94 ofertas ativas e entrega 5. O
+ * /search/result/<tipo> e a busca de verdade, com 20 por pagina e um contador de
+ * paginas. Como o radar quer o que existe do produto, e nao uma amostra, e por
+ * ele que passamos.
  */
-const SEARCH_API = "https://api.promobit.com.br/search";
+const SEARCH_API = "https://api.promobit.com.br/search/result";
+/**
+ * Paginas por termo. O contador de paginas diz quantas existem; este teto evita
+ * que um termo generico sozinho vire dezenas de pedidos ao mesmo site.
+ */
+const MAX_PAGES = 3;
 const SITE_URL = "https://www.promobit.com.br";
 const IMAGE_HOST = "https://i.promobit.com.br";
 const PROVIDER_NAME = "Promobit";
@@ -54,8 +63,13 @@ type SearchCoupon = {
   store_image?: string;
 };
 
-type SearchResponse = {
-  active_offers?: SearchOffer[];
+type OffersResponse = {
+  /** Quantidade de paginas, nao de itens. */
+  total?: number;
+  offers?: SearchOffer[];
+};
+
+type CouponsResponse = {
   coupons?: SearchCoupon[];
 };
 
@@ -127,20 +141,38 @@ const toCouponOffer = (raw: SearchCoupon): MarketOffer | undefined => {
 
 const isApproved = (status: string | undefined) => !status || status === "APPROVED";
 
-/**
- * Ofertas e cupons que casam com o termo. As expiradas (finished_offers) ficam de
- * fora: a API as devolve aos milhares e nenhuma leva a um preco que ainda existe.
- */
-export const searchPromobit = async (term: string): Promise<MarketOffer[]> => {
-  const payload = await fetchJson<SearchResponse>(
-    `${SEARCH_API}?q=${encodeURIComponent(term)}`
+const offersPage = (term: string, page: number) =>
+  fetchJson<OffersResponse>(
+    `${SEARCH_API}/offers?q=${encodeURIComponent(term)}&offer_status_name=APPROVED&page=${page}`
   );
 
-  const offers = (payload.active_offers ?? [])
+/**
+ * Ofertas e cupons que casam com o termo. As expiradas ficam de fora: a API as
+ * devolve aos milhares e nenhuma leva a um preco que ainda existe.
+ *
+ * As paginas vao uma de cada vez, e nao em paralelo: o teto de simultaneidade da
+ * varredura conta tarefas, nao os pedidos de dentro de uma, e disparar tudo junto
+ * aqui furaria o limite que existe para nao levar 429.
+ */
+export const searchPromobit = async (term: string): Promise<MarketOffer[]> => {
+  const first = await offersPage(term, 1);
+  const pages = [first];
+
+  const lastPage = Math.min(first.total ?? 1, MAX_PAGES);
+  for (let page = 2; page <= lastPage; page += 1) {
+    pages.push(await offersPage(term, page));
+  }
+
+  const offers = pages
+    .flatMap((payload) => payload.offers ?? [])
     .filter((offer) => isApproved(offer.offer_status_name))
     .map(toOffer);
 
-  const coupons = (payload.coupons ?? [])
+  const couponPayload = await fetchJson<CouponsResponse>(
+    `${SEARCH_API}/coupons?q=${encodeURIComponent(term)}`
+  );
+
+  const coupons = (couponPayload.coupons ?? [])
     .filter((coupon) => isApproved(coupon.coupon_status_name))
     .map(toCouponOffer);
 
