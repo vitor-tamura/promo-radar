@@ -68,6 +68,21 @@ npm run web         # desenvolvimento em http://localhost:3000
 npm run web:build   # build de producao
 ```
 
+### Por que a build instala a raiz junto
+
+O `web/vercel.json` manda instalar as duas arvores —
+`npm install --prefix .. && npm install` — e isso nao e redundancia. Um import sem
+caminho dentro de `App.tsx` e procurado subindo a arvore a partir da raiz do
+projeto, onde `web/node_modules` nunca aparece: instalar so `web/` deixa a
+interface compartilhada sem nada para resolver, e a build para em
+`Module not found: Can't resolve 'react-native'`. Na maquina de quem desenvolve o
+erro nao aparece, porque a raiz tambem tem um `node_modules` instalado.
+
+O `next.config.mjs` ainda declara `web/node_modules` em `resolve.modules` e usa
+caminhos absolutos nos alias, para o empacotamento nao depender de onde esta o
+arquivo que importou. Quem realmente precisa da raiz instalada e a checagem de
+tipos, que resolve modulos por conta propria e nao enxerga alias de empacotador.
+
 ### Manter a versao do Next em dia
 
 A Vercel recusa publicar uma versao do Next com falha de seguranca conhecida, com
@@ -115,27 +130,6 @@ mesma regra congelaria a primeira versao carregada — nenhuma alteracao aparece
 mais no navegador. Em modo de desenvolvimento o app remove qualquer worker que ja
 esteja instalado naquela origem, para quem rodou uma build de producao antes nao
 ficar preso.
-
-### Publicar
-
-Importe o repositorio na Vercel e defina **Root Directory** como `web`. Deixe
-ligada a opcao de incluir arquivos de fora do Root Directory, que vem ligada por
-padrao: o app importa `App.tsx` e `src/` da raiz do projeto. O resto vem do
-`web/vercel.json`.
-
-O ponto que quebra um deploy ingenuo esta la: o comando de instalacao e
-`npm install --prefix .. && npm install`, os dois. Um import sem caminho dentro de
-`App.tsx` e procurado subindo a arvore a partir da raiz do projeto, onde
-`web/node_modules` nunca aparece — instalar so `web/` deixa a interface
-compartilhada sem nada para resolver, e a build para em
-`Module not found: Can't resolve 'react-native'`. Na sua maquina isso passa
-despercebido porque a raiz tambem tem um `node_modules` instalado.
-
-Por isso a raiz e instalada junto, o que custa cerca de um minuto a mais por
-build. O `next.config.mjs` ainda declara `web/node_modules` em `resolve.modules`
-e usa caminhos absolutos nos alias, para o empacotamento nao depender de onde o
-arquivo que importou esta; a checagem de tipos, que resolve modulos por conta
-propria, e quem realmente precisa da raiz instalada.
 
 ## Extensao do Chrome
 
@@ -196,24 +190,21 @@ digitado nao envelhece; o resultado da varredura, sim, e depois de seis horas el
 e descartado por descrever precos que ja mudaram, deixando o termo pronto para ser
 disparado de novo.
 
-### Publicar uma versao nova
+### Como o ZIP e montado
 
 ```bash
 npm run extension:zip   # gera promo-radar-extensao.zip
 ```
 
-Suba a `version` no `package.json` — o manifesto da extensao acompanha sozinho —
-gere o ZIP e anexe a um release novo no GitHub com esse mesmo nome de arquivo: e
-o que mantem o link de download acima sempre apontando para a versao mais
-recente. O ZIP nao e versionado no git.
+O manifesto herda a `version` do `package.json`, e o ZIP nao e versionado no git.
 
 O arquivo e montado por `scripts/zip.mjs`, escrito a mao, sem depender de
 ferramenta do sistema. Nenhuma serve nos tres lugares onde o projeto e
 empacotado: o `zip` nao vem no Windows, e o `Compress-Archive` do PowerShell 5.1,
 que vem, grava os caminhos com barra invertida. A especificacao do ZIP pede barra
-normal, e quem baixasse o release e descompactasse fora do Windows receberia
-arquivos chamados `bundle\static\js\...` em vez de pastas — uma extensao que nao
-carrega, e so para quem baixou.
+normal, e quem descompactasse fora do Windows receberia arquivos chamados
+`bundle\static\js\...` em vez de pastas — uma extensao que nao carrega, e so para
+quem baixou.
 
 ## APK Android
 
