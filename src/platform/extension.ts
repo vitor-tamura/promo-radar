@@ -54,9 +54,16 @@ export const notifyViaChrome = async ({ id, title, body, url, critical }: Chrome
   return notificationId;
 };
 
-/** Abre a oferta numa aba, reaproveitando a sessao ja logada do navegador. */
-export const openInTab = async (url: string) => {
-  await chromeApi.tabs.create({ url, active: true });
+/**
+ * Abre a oferta numa aba, reaproveitando a sessao ja logada do navegador.
+ *
+ * Em segundo plano a aba nasce sem roubar o foco, e e isso que mantem o popup
+ * vivo: ele e destruido assim que perde o foco, entao uma aba em primeiro plano
+ * encerra a navegacao pela lista. Abrindo atras, da para enfileirar varias
+ * ofertas sem sair de onde esta.
+ */
+export const openInTab = async (url: string, { background = false } = {}) => {
+  await chromeApi.tabs.create({ url, active: !background });
 };
 
 const TAB_PAGE = "tab.html";

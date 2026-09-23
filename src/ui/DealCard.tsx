@@ -1,9 +1,12 @@
 import { useEffect, useRef } from "react";
-import { Animated, Easing, Image, Pressable, Text, View } from "react-native";
-import { openOffer } from "../services/openOffer";
+import { Animated, Easing, Image, Platform, Pressable, Text, View } from "react-native";
+import { openOffer, openOfferInBackground } from "../services/openOffer";
 import { Deal, ImportTaxEstimate } from "../types";
 import { formatElapsed } from "./relativeTime";
 import { createThemedStyles, currency, KindTheme, useKindTheme, useNative } from "./theme";
+
+/** event.button do botao do meio, o da rodinha. */
+const MIDDLE_BUTTON = 1;
 
 type Props = {
   deal: Deal;
@@ -17,6 +20,7 @@ export function DealCard({ deal, index, highlight }: Props) {
   const styles = useStyles();
   const kindTheme = useKindTheme();
 
+  const cardRef = useRef<View>(null);
   const enter = useRef(new Animated.Value(0)).current;
   const press = useRef(new Animated.Value(1)).current;
   const theme = highlight ?? kindTheme[deal.kind];
@@ -43,6 +47,45 @@ export function DealCard({ deal, index, highlight }: Props) {
     Animated.spring(press, { toValue, useNativeDriver: useNative, speed: 40, bounciness: 0 }).start();
   };
 
+  /**
+   * Botao do meio abre a oferta numa aba atras da atual, como faria em qualquer
+   * link. O Pressable nao enxerga esse botao — ele so reporta o clique normal —
+   * entao o evento e escutado direto no elemento, que no react-native-web e o
+   * proprio no do DOM. Fora do navegador nao ha botao do meio e nada disso roda.
+   */
+  useEffect(() => {
+    const node = cardRef.current as unknown as HTMLElement | null;
+
+    if (Platform.OS !== "web" || !node) {
+      return undefined;
+    }
+
+    const openInBackground = (event: MouseEvent) => {
+      if (event.button !== MIDDLE_BUTTON) {
+        return;
+      }
+
+      event.preventDefault();
+      openOfferInBackground(deal.url);
+    };
+
+    // O mousedown do botao do meio liga a rolagem automatica do navegador: sem
+    // impedir, o cursor vira a bussola de rolagem junto com a aba que abriu.
+    const suppressAutoScroll = (event: MouseEvent) => {
+      if (event.button === MIDDLE_BUTTON) {
+        event.preventDefault();
+      }
+    };
+
+    node.addEventListener("auxclick", openInBackground);
+    node.addEventListener("mousedown", suppressAutoScroll);
+
+    return () => {
+      node.removeEventListener("auxclick", openInBackground);
+      node.removeEventListener("mousedown", suppressAutoScroll);
+    };
+  }, [deal.url]);
+
   return (
     <Animated.View
       style={{
@@ -54,6 +97,7 @@ export function DealCard({ deal, index, highlight }: Props) {
       }}
     >
       <Pressable
+        ref={cardRef}
         style={styles.card}
         onPress={() => openOffer(deal.url)}
         onPressIn={() => animatePress(0.98)}

@@ -179,9 +179,22 @@ O que a extensao faz alem do app web:
   so o app web servido sem servidor proprio, que depende do leitor publico.
 - **Popup e aba.** O icone abre um popup de 420x600; o menu tem "Abrir em aba"
   para quando a lista cresce.
+- **Botao do meio abre por tras.** Clicar numa oferta com a rodinha do mouse abre
+  a loja numa aba de fundo, sem tirar o foco — e o popup, que morre assim que
+  perde o foco, continua aberto. Da para marcar varias ofertas em sequencia e ver
+  depois, em vez de reabrir o popup a cada uma.
 
 Popup e service worker compartilham o mesmo `chrome.storage.local`, entao o feed
 que aparece ao abrir o popup e o da ultima varredura de segundo plano.
+
+A busca tambem fica guardada ali, e nao na memoria da pagina. O popup e destruido
+toda vez que perde o foco, e sem isso voltar a ele significaria digitar o termo de
+novo e esperar outra varredura dirigida — justamente o trabalho que a busca
+acabou de fazer. Guardado, o popup reabre onde estava, e a aba expandida enxerga a
+mesma busca, porque as duas superficies leem o mesmo armazenamento. O termo
+digitado nao envelhece; o resultado da varredura, sim, e depois de seis horas ele
+e descartado por descrever precos que ja mudaram, deixando o termo pronto para ser
+disparado de novo.
 
 ### Publicar uma versao nova
 

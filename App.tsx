@@ -30,6 +30,7 @@ import { clearPriceHistory, countTrackedProducts } from "./src/services/priceHis
 import { clearBadge, isPopupSurface, openAppInTab } from "./src/platform/extension";
 import { loadSettings, loadStores, saveSettings, saveStores } from "./src/storage/appStorage";
 import { loadFeed, saveFeed, subscribeToFeed } from "./src/storage/feedCache";
+import { clearSavedSearch, loadSearch, saveSearch } from "./src/storage/searchState";
 import {
   AlertSettings,
   Deal,
@@ -61,6 +62,8 @@ import {
 } from "./src/ui/theme";
 
 const RESULT_PANEL_TIMEOUT_MS = 9000;
+/** Respiro entre a ultima tecla e a gravacao da busca. */
+const SEARCH_SAVE_DELAY_MS = 400;
 
 /**
  * O SafeAreaView so recua o conteudo no iOS, e no Android o app desenha por baixo
@@ -97,16 +100,19 @@ export default function App() {
   const [msRemaining, setMsRemaining] = useState(0);
 
   const isScanningRef = useRef(false);
+  /** So grava a busca depois de ler o que estava guardado. */
+  const hydratedRef = useRef(false);
   const settingsRef = useRef(settings);
   const dismissTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
     const hydrate = async () => {
-      const [storedStores, storedSettings, tracked, cachedFeed] = await Promise.all([
+      const [storedStores, storedSettings, tracked, cachedFeed, savedSearch] = await Promise.all([
         loadStores(),
         loadSettings(),
         countTrackedProducts(),
-        loadFeed()
+        loadFeed(),
+        loadSearch()
       ]);
 
       setStores(storedStores);
@@ -122,6 +128,17 @@ export default function App() {
         setDeals(cachedFeed.deals);
       }
 
+      // A busca continua de onde parou: na extensao o popup e destruido a cada
+      // clique numa oferta, e sem isto o termo e a varredura dirigida se perdiam.
+      if (savedSearch) {
+        setSearchDraft(savedSearch.draft);
+        setFocusTerm(savedSearch.focusTerm);
+        setFocusDeals(savedSearch.focusDeals);
+      }
+
+      // A partir daqui o estado na tela e o guardado: gravar por cima e seguro.
+      hydratedRef.current = true;
+
       // O feed esta na tela: o contador do icone da extensao ja cumpriu o papel.
       await clearBadge();
     };
@@ -132,6 +149,23 @@ export default function App() {
 
     return () => clearTimeout(dismissTimerRef.current);
   }, []);
+
+  /**
+   * Grava a busca a cada mudanca, com um respiro entre elas: sem a espera, cada
+   * tecla digitada viraria uma escrita no armazenamento. O guarda de hidratacao
+   * impede que o primeiro render, ainda vazio, apague o que estava guardado.
+   */
+  useEffect(() => {
+    if (!hydratedRef.current) {
+      return undefined;
+    }
+
+    const timer = setTimeout(() => {
+      saveSearch({ draft: searchDraft, focusTerm, focusDeals }).catch(() => undefined);
+    }, SEARCH_SAVE_DELAY_MS);
+
+    return () => clearTimeout(timer);
+  }, [focusDeals, focusTerm, searchDraft]);
 
   // Popup aberto enquanto o service worker varre: o feed novo entra na hora.
   useEffect(
@@ -339,6 +373,8 @@ export default function App() {
     setSearchDraft("");
     setFocusTerm(undefined);
     setFocusDeals([]);
+    // Direto, sem esperar o intervalo: limpar e uma ordem, nao um rascunho.
+    clearSavedSearch().catch(() => undefined);
   }, []);
 
   /** A lista vazia diz o que fazer, e isso muda conforme por que ela esta vazia. */
