@@ -34,6 +34,12 @@ body {
   height: 100%;
   background-color: var(--promo-background);
   overscroll-behavior-y: none;
+  /*
+   * Quem rola e a lista dentro do app, nunca o documento. Sem isto qualquer
+   * elemento que ultrapasse a janela — um container de portal esticado, uma
+   * margem sobrando — abre uma segunda barra de rolagem ao lado da primeira.
+   */
+  overflow: hidden;
 }
 
 body {
@@ -42,8 +48,17 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-#__next,
-body > div {
+/*
+ * So o container do app recebe altura. O react-native-web tambem pendura divs
+ * proprias no body, e uma regra por "body > div" as esticaria junto: elas
+ * empilham abaixo do app e o documento fica com o dobro da altura da janela.
+ *
+ * Coluna flex porque a raiz do app se dimensiona por `flex: 1`, que precisa de
+ * um pai com altura definida para ter de onde crescer.
+ */
+#promo-root {
+  display: flex;
+  flex-direction: column;
   height: 100%;
 }
 

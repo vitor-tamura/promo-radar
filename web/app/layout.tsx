@@ -39,7 +39,16 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="pt-BR">
-      <body>{children}</body>
+      {/*
+        O app mora num container proprio, com id, em vez de solto no body. O
+        react-native-web anexa ao body os seus containers de portal (modal,
+        medicao), e sem um alvo nomeado a regra de altura do CSS teria de mirar
+        "body > div" — acertando esses tambem e esticando cada um ate a altura da
+        janela, o que empilha alturas e cria uma segunda barra de rolagem.
+      */}
+      <body>
+        <div id="promo-root">{children}</div>
+      </body>
     </html>
   );
 }
