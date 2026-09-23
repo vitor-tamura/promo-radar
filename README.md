@@ -53,6 +53,25 @@ no lugar de 0,7s; ja "ssd nvme" nao ganhou nada — as mesmas 32 ofertas e 3 loj
 e levou 4,2s no lugar de 1,0s. Termo estreito raramente casa com a vitrine de uma
 loja; termo largo casa bastante.
 
+## Filtro de preco
+
+No topo do radar, ao lado da ordenacao, o botao **Preco** abre faixas prontas
+(ate R$ 100, R$ 100 a 300, e por ai) e um intervalo minimo-maximo para digitar.
+Tocar de novo numa faixa ja marcada a desmarca, que e como se desfaz sem apagar
+dois campos.
+
+O recorte acontece antes das abas, junto com o texto da busca: as contagens de
+Promos, Cupons e Suspeitos e a lista de categorias descrevem o que a lista vai
+mostrar, e nao um total que o filtro ja tirou da frente.
+
+Oferta sem preco proprio — cupom e cashback, cujo desconto so aparece no carrinho
+— fica de fora enquanto houver filtro de preco. Pedir "de R$ 100 a R$ 300" e pedir
+coisas que custam isso, e um cupom nao custa nada. Sem filtro elas seguem no feed
+normalmente.
+
+O intervalo e guardado junto com a busca, pelo mesmo motivo: na extensao o popup
+e destruido a cada clique numa oferta.
+
 ## Tema claro e escuro
 
 Por padrao o app acompanha o aparelho. Em **Alertas › Aparencia** da para fixar

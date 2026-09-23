@@ -46,6 +46,13 @@ import { AliexpressScreen } from "./src/ui/AliexpressScreen";
 import { AppMenu } from "./src/ui/AppMenu";
 import { ALL_CATEGORIES, CategoryFilter } from "./src/ui/CategoryFilter";
 import { SortButton, SortMode, sortDeals } from "./src/ui/SortButton";
+import {
+  EMPTY_PRICE_RANGE,
+  filterByPrice,
+  PriceFilterButton,
+  PriceFilterPanel,
+  PriceRange
+} from "./src/ui/PriceFilter";
 import { filterByQuery, SearchBanner, SearchBar } from "./src/ui/SearchBar";
 import { formatInterval, scanIntervals } from "./src/ui/scanInterval";
 import { DealCard } from "./src/ui/DealCard";
@@ -87,6 +94,8 @@ export default function App() {
    */
   const [focusTerm, setFocusTerm] = useState<string>();
   const [focusDeals, setFocusDeals] = useState<Deal[]>([]);
+  const [priceRange, setPriceRange] = useState<PriceRange>(EMPTY_PRICE_RANGE);
+  const [priceOpen, setPriceOpen] = useState(false);
   const [stores, setStores] = useState<StorePreference[]>(defaultStorePreferences);
   const [settings, setSettings] = useState<AlertSettings>(defaultSettings);
   const [isScanning, setIsScanning] = useState(false);
@@ -134,6 +143,7 @@ export default function App() {
         setSearchDraft(savedSearch.draft);
         setFocusTerm(savedSearch.focusTerm);
         setFocusDeals(savedSearch.focusDeals);
+        setPriceRange(savedSearch.priceRange);
       }
 
       // A partir daqui o estado na tela e o guardado: gravar por cima e seguro.
@@ -161,11 +171,11 @@ export default function App() {
     }
 
     const timer = setTimeout(() => {
-      saveSearch({ draft: searchDraft, focusTerm, focusDeals }).catch(() => undefined);
+      saveSearch({ draft: searchDraft, focusTerm, focusDeals, priceRange }).catch(() => undefined);
     }, SEARCH_SAVE_DELAY_MS);
 
     return () => clearTimeout(timer);
-  }, [focusDeals, focusTerm, searchDraft]);
+  }, [focusDeals, focusTerm, priceRange, searchDraft]);
 
   // Popup aberto enquanto o service worker varre: o feed novo entra na hora.
   useEffect(
@@ -185,15 +195,18 @@ export default function App() {
   /** O que a lista mostra: o resultado da busca, quando houver, ou o feed do radar. */
   const sourceDeals = focusTerm ? focusDeals : deals;
 
-  // O texto digitado recorta a lista na hora, antes mesmo de ir as fontes.
-  const dealsByQuery = useMemo(
-    () => filterByQuery(sourceDeals, searchDraft),
-    [searchDraft, sourceDeals]
+  /**
+   * Texto e preco recortam a lista na hora, antes mesmo de ir as fontes, e antes
+   * das abas: assim as contagens e as categorias descrevem o que a lista mostra.
+   */
+  const filteredDeals = useMemo(
+    () => filterByPrice(filterByQuery(sourceDeals, searchDraft), priceRange),
+    [priceRange, searchDraft, sourceDeals]
   );
 
   const dealsByKind = useMemo(
-    () => (filter === "all" ? dealsByQuery : dealsByQuery.filter((deal) => deal.kind === filter)),
-    [dealsByQuery, filter]
+    () => (filter === "all" ? filteredDeals : filteredDeals.filter((deal) => deal.kind === filter)),
+    [filteredDeals, filter]
   );
 
   /** Categorias presentes no recorte atual, da maior para a menor. */
@@ -226,12 +239,12 @@ export default function App() {
   // ofertas que a busca ja tirou da frente.
   const counts = useMemo(
     () => ({
-      all: dealsByQuery.length,
-      promo: dealsByQuery.filter((deal) => deal.kind === "promo").length,
-      coupon: dealsByQuery.filter((deal) => deal.kind === "coupon").length,
-      bug: dealsByQuery.filter((deal) => deal.kind === "bug").length
+      all: filteredDeals.length,
+      promo: filteredDeals.filter((deal) => deal.kind === "promo").length,
+      coupon: filteredDeals.filter((deal) => deal.kind === "coupon").length,
+      bug: filteredDeals.filter((deal) => deal.kind === "bug").length
     }),
-    [dealsByQuery]
+    [filteredDeals]
   );
 
   const activeStores = useMemo(() => stores.filter((store) => store.enabled).length, [stores]);
@@ -373,6 +386,7 @@ export default function App() {
     setSearchDraft("");
     setFocusTerm(undefined);
     setFocusDeals([]);
+    setPriceRange(EMPTY_PRICE_RANGE);
     // Direto, sem esperar o intervalo: limpar e uma ordem, nao um rascunho.
     clearSavedSearch().catch(() => undefined);
   }, []);
@@ -554,9 +568,21 @@ export default function App() {
                   <CategoryFilter options={categoryOptions} value={activeCategory} onChange={setCategory} />
                 </View>
                 <View style={styles.sortWrapper}>
+                  <PriceFilterButton
+                    value={priceRange}
+                    onChange={setPriceRange}
+                    open={priceOpen}
+                    onToggle={() => setPriceOpen((open) => !open)}
+                  />
+                </View>
+                <View style={styles.sortWrapper}>
                   <SortButton value={sortMode} onChange={setSortMode} />
                 </View>
               </View>
+
+              {priceOpen ? (
+                <PriceFilterPanel value={priceRange} onChange={setPriceRange} />
+              ) : null}
 
               <FlatList
                 data={visibleDeals}

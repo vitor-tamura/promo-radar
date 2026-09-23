@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { PriceRange } from "../ui/PriceFilter";
 import { Deal } from "../types";
 
 const SEARCH_KEY = "@promo-radar/search";
@@ -16,6 +17,8 @@ export type SavedSearch = {
   /** Produto da ultima varredura dirigida, quando houve uma. */
   focusTerm?: string;
   focusDeals: Deal[];
+  /** Intervalo de preco em vigor no feed. */
+  priceRange: PriceRange;
   savedAt: number;
 };
 
@@ -31,8 +34,14 @@ export type SavedSearch = {
  */
 export const saveSearch = async (search: Omit<SavedSearch, "savedAt">) => {
   try {
-    // Busca vazia nao e estado a guardar: e o estado inicial.
-    if (!search.draft.trim() && !search.focusTerm) {
+    // Nada escolhido nao e estado a guardar: e o estado inicial.
+    const vazio =
+      !search.draft.trim() &&
+      !search.focusTerm &&
+      search.priceRange.min === undefined &&
+      search.priceRange.max === undefined;
+
+    if (vazio) {
       await AsyncStorage.removeItem(SEARCH_KEY);
       return;
     }
@@ -64,7 +73,9 @@ export const loadSearch = async (): Promise<SavedSearch | undefined> => {
       // Sem as ofertas nao ha o que a faixa de resultado anuncie, entao o termo
       // dirigido cai junto e a tela volta ao feed normal com o texto no campo.
       focusTerm: stale ? undefined : cached.focusTerm,
-      focusDeals: stale || !Array.isArray(cached.focusDeals) ? [] : cached.focusDeals
+      focusDeals: stale || !Array.isArray(cached.focusDeals) ? [] : cached.focusDeals,
+      // O intervalo nao envelhece: ele descreve o que voce quer ver, nao um preco.
+      priceRange: cached.priceRange ?? {}
     };
   } catch {
     return undefined;
