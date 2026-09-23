@@ -3,8 +3,8 @@
  *
  * O prebuild recria o diretorio android/ a partir do app.json e dos plugins, o
  * que mantem o projeto nativo descartavel: a fonte da verdade continua sendo a
- * configuracao do Expo. Depois o Gradle compila e assina com a chave descrita em
- * keystore.properties.
+ * configuracao do Expo. Depois o Gradle compila e assina com a chave descrita no
+ * .env da raiz, ou nas variaveis de ambiente equivalentes.
  *
  * Saida: dist-apk/promo-radar-<versao>.apk
  */
@@ -33,11 +33,29 @@ const step = (message) => console.log(`\n[36m▸ ${message}[0m`);
 
 const { version } = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8"));
 
-if (!existsSync(resolve(root, "keystore.properties"))) {
+/**
+ * A chave que assina o release vem do ambiente ou do .env da raiz, na mesma ordem
+ * que o Gradle usa. Conferir antes evita descobrir a falta depois de alguns
+ * minutos de compilacao, com um APK assinado pela chave de depuracao na mao.
+ */
+const signingKeyConfigured = () => {
+  if (process.env.PROMO_KEYSTORE_FILE) {
+    return true;
+  }
+
+  const envFile = resolve(root, ".env");
+
+  return (
+    existsSync(envFile) && /^\s*PROMO_KEYSTORE_FILE\s*=\s*\S/m.test(readFileSync(envFile, "utf8"))
+  );
+};
+
+if (!signingKeyConfigured()) {
   console.warn(
-    "[33m⚠ keystore.properties nao encontrado: o APK sairia assinado com a chave de\n" +
+    "[33m⚠ Chave de assinatura nao configurada: o APK sairia assinado com a chave de\n" +
       "  depuracao, que nao serve para distribuir nem para atualizar um app ja instalado.\n" +
-      "  Veja README.md para gerar a sua.[0m"
+      "  Copie .env.example para .env e preencha, ou defina PROMO_KEYSTORE_FILE e as\n" +
+      "  senhas como variaveis de ambiente. Veja README.md.[0m"
   );
   process.exit(1);
 }

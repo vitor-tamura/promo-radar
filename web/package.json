@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
-    "next": "15.5.4",
+    "next": "^15.5.26",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native-web": "^0.21.2"
@@ -21,5 +21,9 @@
     "@types/react": "~19.2.0",
     "@types/react-dom": "~19.2.0",
     "typescript": "~5.9.3"
+  },
+  "overrides": {
+    "postcss": "^8.5.23",
+    "sharp": "^0.35.4"
   }
 }

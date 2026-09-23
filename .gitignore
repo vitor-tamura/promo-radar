@@ -28,7 +28,14 @@ web/tsconfig.tsbuildinfo
 android/
 ios/
 
+# segredos: o .env vale em qualquer nivel (raiz, web/), e o .env.example e o
+# unico que sobe, porque so tem os nomes das chaves e nenhum valor
+.env
+.env.*
+!.env.example
+
 # chave de assinatura do APK: perde-la impede atualizar o app ja instalado
 *.jks
 *.keystore
+# formato antigo das credenciais de assinatura, hoje no .env
 keystore.properties

@@ -41,6 +41,26 @@ npm run web         # desenvolvimento em http://localhost:3000
 npm run web:build   # build de producao
 ```
 
+### Manter a versao do Next em dia
+
+A Vercel recusa publicar uma versao do Next com falha de seguranca conhecida, com
+a mensagem `Vulnerable version of Next.js detected`. Antes de um deploy, vale
+rodar `npm audit` dentro de `web/` e subir a versao se aparecer algo.
+
+O projeto fica na linha **15.5** de proposito. O `latest` do Next ja e 16, mas la
+o Turbopack e o empacotador padrao do build, e ele ignora a funcao `webpack()` do
+`next.config.mjs` — que e justamente o que resolve react-native para
+react-native-web. Migrar exige reescrever aquele bloco em `turbopack.resolveAlias`,
+e `resolve.modules` nao tem equivalente direto. Enquanto isso nao for feito,
+atualize dentro da 15.5, onde as correcoes de seguranca continuam saindo.
+
+O `overrides` no `package.json` e do mesmo assunto: `postcss` e `sharp` entram
+como dependencias do proprio Next, presas a versoes com falha conhecida, e o
+override destrava as corrigidas. Nenhum dos dois e usado em tempo de execucao
+aqui — o app nao usa `next/image`, e as imagens dos anuncios sao `<img>` comum —
+mas deixar vulnerabilidade conhecida no projeto so torna o proximo `npm audit`
+inutil, porque ninguem le uma lista que sempre tem ruido.
+
 ### O proxy, e por que ele muda tudo
 
 No navegador a politica de origem barra o acesso direto as lojas, e sem servidor
@@ -162,12 +182,13 @@ adb install -r dist-apk/promo-radar-0.1.0.apk
 
 ### Chave de assinatura
 
-O APK e assinado com a chave descrita em `keystore.properties` na raiz do
-projeto. O arquivo e o `.keystore` ficam fora do controle de versao.
+O APK e assinado com a chave descrita no `.env` da raiz do projeto. O `.env` e o
+`.keystore` ficam fora do controle de versao.
 
 > **Guarde os dois.** O Android recusa atualizar um app instalado se a assinatura
 > mudar: sem essa chave, a unica saida e desinstalar e reinstalar, perdendo o
-> historico de precos e as preferencias.
+> historico de precos e as preferencias. Guarde tambem uma copia das senhas fora
+> do projeto, num gerenciador de senhas.
 
 Para criar uma chave nova (em outra maquina, por exemplo):
 
@@ -177,17 +198,31 @@ keytool -genkeypair -v -storetype PKCS12 \
   -alias promo-radar -keyalg RSA -keysize 2048 -validity 10000
 ```
 
-E entao escreva `keystore.properties`:
+E entao copie `.env.example` para `.env` e preencha:
 
-```properties
-storeFile=promo-radar-release.keystore
-storePassword=...
-keyAlias=promo-radar
-keyPassword=...
+```bash
+cp .env.example .env
 ```
 
-Sem esse arquivo o build cai na chave de depuracao, que serve para testar mas nao
-para distribuir.
+```properties
+PROMO_KEYSTORE_FILE=promo-radar-release.keystore
+PROMO_KEYSTORE_PASSWORD=...
+PROMO_KEY_ALIAS=promo-radar
+PROMO_KEY_PASSWORD=...
+```
+
+Sem essas variaveis o `npm run apk` para antes de compilar, em vez de entregar um
+APK assinado com a chave de depuracao — que instala, mas nao atualiza o app de
+ninguem.
+
+Numa esteira de publicacao, defina as mesmas variaveis como segredos do ambiente
+e nao escreva `.env` nenhum: o Gradle le a variavel de ambiente primeiro e so cai
+no arquivo quando ela nao existe. Uma copia a menos no disco e uma copia a menos
+para vazar.
+
+> Ate a versao 0.1.0 essas credenciais ficavam em `keystore.properties`. Se voce
+> tem esse arquivo de antes, mova os quatro valores para o `.env` com os nomes
+> acima; o formato antigo nao e mais lido.
 
 ### Sobre o diretorio `android/`
 
@@ -195,6 +230,27 @@ E gerado por `npx expo prebuild` e nao versionado: a configuracao de verdade est
 em `app.json` e em `plugins/`. O plugin `withReleaseSigning` reinjeta a assinatura
 de release a cada prebuild, porque o template do React Native assina o release com
 a chave publica de depuracao.
+
+## Segredos
+
+O projeto tem **um** segredo: a chave que assina o APK. As fontes que o radar
+consulta sao paginas e APIs publicas, sem autenticacao — nao ha chave de API a
+guardar, e nenhuma credencial nunca entrou no historico do git.
+
+Tudo que for sensivel vai para o `.env` da raiz, que o `.gitignore` bloqueia junto
+com qualquer `.env.*`. O unico que sobe e o `.env.example`, que lista os nomes das
+variaveis sem valor nenhum e serve de modelo:
+
+```bash
+cp .env.example .env
+```
+
+> **Cuidado com os prefixos publicos.** O Expo injeta no pacote do aplicativo toda
+> variavel do `.env` que comece com `EXPO_PUBLIC_`, e o Next faz o mesmo com
+> `NEXT_PUBLIC_`. Uma vez embutida, ela esta no aparelho de quem instalou e no
+> JavaScript que o navegador baixa: e configuracao publica, nunca segredo. Um
+> segredo de verdade so pode ser lido onde o codigo nao e entregue ao usuario —
+> no build, como a chave de assinatura, ou numa funcao de servidor.
 
 ## Desenvolvimento
 

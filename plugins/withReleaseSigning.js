@@ -8,26 +8,36 @@ const { withAppBuildGradle } = require("expo/config-plugins");
  * a assinatura mudar, entao um APK de debug nao serve para distribuir.
  *
  * Este plugin roda a cada prebuild, que reescreve o diretorio android/ inteiro.
- * As credenciais ficam em keystore.properties na raiz do projeto, fora do que e
- * gerado e fora do controle de versao; sem esse arquivo o build continua com a
+ * As credenciais vem do ambiente ou do .env na raiz do projeto, os dois fora do
+ * que e gerado e fora do controle de versao; sem elas o build continua com a
  * chave de depuracao, para quem so quer compilar e testar nao precisar de uma.
+ *
+ * A variavel de ambiente vence o arquivo de proposito: numa esteira de publicacao
+ * o segredo chega como variavel, e escrever um .env no disco do runner so criaria
+ * uma copia a mais para vazar.
  */
 
 const PROPERTIES_LOADER = `
-// Credenciais de assinatura (keystore.properties na raiz do projeto, fora do git).
+// Credenciais de assinatura: variavel de ambiente primeiro, depois o .env da raiz
+// do projeto. Nenhum dos dois entra no controle de versao.
 def promoSigning = new Properties()
-def promoSigningFile = rootProject.file("../keystore.properties")
+def promoSigningFile = rootProject.file("../.env")
 if (promoSigningFile.exists()) {
     promoSigningFile.withInputStream { promoSigning.load(it) }
+}
+// Aspas em volta do valor sao convencao comum de .env e nao fazem parte do segredo.
+def promoSecret = { String name ->
+    def value = System.getenv(name) ?: promoSigning[name]
+    value ? value.toString().trim().replaceAll(/^["']|["']\\$/, '') : null
 }
 `;
 
 const RELEASE_SIGNING_CONFIG = `        release {
-            if (promoSigning['storeFile']) {
-                storeFile rootProject.file("../" + promoSigning['storeFile'])
-                storePassword promoSigning['storePassword']
-                keyAlias promoSigning['keyAlias']
-                keyPassword promoSigning['keyPassword']
+            if (promoSecret('PROMO_KEYSTORE_FILE')) {
+                storeFile rootProject.file("../" + promoSecret('PROMO_KEYSTORE_FILE'))
+                storePassword promoSecret('PROMO_KEYSTORE_PASSWORD')
+                keyAlias promoSecret('PROMO_KEY_ALIAS')
+                keyPassword promoSecret('PROMO_KEY_PASSWORD')
             }
         }
 `;
@@ -44,8 +54,8 @@ const TEMPLATE_RELEASE_SIGNING = `            // Caution! In production, you nee
             // see https://reactnative.dev/docs/signed-apk-android.
             signingConfig signingConfigs.debug`;
 
-const PROJECT_RELEASE_SIGNING = `            // Chave do projeto quando keystore.properties existe; sem ele, a de depuracao.
-            signingConfig promoSigning['storeFile'] ? signingConfigs.release : signingConfigs.debug`;
+const PROJECT_RELEASE_SIGNING = `            // Chave do projeto quando o segredo existe; sem ele, a de depuracao.
+            signingConfig promoSecret('PROMO_KEYSTORE_FILE') ? signingConfigs.release : signingConfigs.debug`;
 
 const withReleaseSigning = (config) =>
   withAppBuildGradle(config, (gradleConfig) => {
