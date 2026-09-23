@@ -580,8 +580,9 @@ export default function App() {
             <ScrollView style={styles.screen} contentContainerStyle={styles.scrollContent}>
               <Text style={styles.sectionTitle}>Lojas</Text>
               <Text style={styles.helperText}>
-                A varredura cobre o mercado por agregadores de preco, busca direto na Amazon e no KaBuM e acompanha
-                as promocoes do Promobit. Aqui voce escolhe de quais lojas quer receber alerta.
+                Cada loja ligada aqui e visitada na varredura, e nao so filtrada no fim: os agregadores
+                indexam poucas lojas, e as demais recusam leitura direta no proprio site. Desligar uma loja
+                tira o alerta dela e encurta a varredura.
               </Text>
               <View style={styles.sourceNote}>
                 <Text style={styles.sourceNoteTitle}>Fontes desta varredura</Text>

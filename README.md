@@ -17,6 +17,19 @@ sabem buscar por palavra. Nao ha recorte nos primeiros termos: a lista inteira
 roda, e o unico teto (24 termos) existe para uma lista colada sem querer nao
 virar centenas de requisicoes. Quanto mais termos, mais longa a varredura.
 
+Alem disso, **cada loja ligada em Lojas e visitada uma a uma**, pela pagina dela no
+Promobit. Isso existe porque os agregadores indexam pouca loja — medindo uma
+varredura real, Buscape e Zoom devolvem sempre os mesmos cinco vendedores
+(Magalu, Amazon, KaBuM, Fast Shop, Webcontinental) — e as demais recusam leitura
+automatizada no proprio site. Sem essa visita, dois tercos do catalogo de lojas
+nunca apareciam: a lista prometia 24 e entregava 9.
+
+A visita custa mais de vinte pedidos ao mesmo site, entao ela so acontece onde da
+para buscar direto: no aplicativo, na extensao e no app publicado, que busca pelo
+servidor. Servido sem servidor proprio, o app depende do leitor publico, que corta
+o excesso com 429 — ali a varredura por loja fica de fora em vez de virar uma
+parede de falhas.
+
 Duas fontes nao aceitam termo de busca e entram por categoria, escolhida a partir
 das suas tags: a vitrine de ofertas do Mercado Livre, que bloqueia a leitura da
 busca por palavra, e as secoes do Promobit, que trazem a garimpagem da

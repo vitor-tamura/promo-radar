@@ -1,5 +1,5 @@
 import { demoDeals } from "../data/demoDeals";
-import { resolveStoreId } from "../data/stores";
+import { enabledStoreTargets, resolveStoreId } from "../data/stores";
 import { resolveCategory } from "./categories";
 import { matchesDiscountTiers } from "./discountTiers";
 import { CRITICAL_DISCOUNT_PERCENT } from "./notificationService";
@@ -336,6 +336,9 @@ export const scanDeals = async (
   const { offers, providers } = await searchMarket({
     keywords: settings.keywords,
     focusTerm: focus,
+    // So as lojas ligadas: pedir a pagina de uma loja que o filtro vai descartar
+    // logo depois seria uma requisicao jogada fora.
+    stores: enabledStoreTargets(stores),
     onProgress
   });
 

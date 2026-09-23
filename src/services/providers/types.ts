@@ -13,6 +13,12 @@ export type SearchTaskSpec = {
   label: string;
 };
 
+/** Loja que o usuario quer acompanhar, como a fonte precisa conhece-la. */
+export type StoreTarget = {
+  name: string;
+  promobitSlug: string;
+};
+
 export type SearchProvider = {
   key: string;
   /** Nome exibido como fonte da oferta. */
@@ -31,6 +37,12 @@ export type SearchProvider = {
    * feed normal navega por categoria) troca de rota aqui.
    */
   buildFocusTasks?: (term: string) => SearchTaskSpec[];
+  /**
+   * Consultas por loja, para a fonte que sabe varrer uma loja inteira. E o que
+   * traz as lojas que nao aparecem sozinhas: elas recusam leitura automatizada e
+   * os agregadores nao as indexam.
+   */
+  buildStoreTasks?: (stores: StoreTarget[]) => SearchTaskSpec[];
   search: (query: string) => Promise<MarketOffer[]>;
 };
 

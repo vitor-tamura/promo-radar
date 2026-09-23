@@ -5,7 +5,7 @@ import { kabumProvider } from "./providers/kabumStore";
 import { mercadoLivreProvider } from "./providers/mercadoLivre";
 import { aggregatorProviders } from "./providers/priceAggregator";
 import { promobitProvider } from "./providers/promobit";
-import { SearchProvider, SearchTaskSpec } from "./providers/types";
+import { SearchProvider, SearchTaskSpec, StoreTarget } from "./providers/types";
 
 /**
  * Teto de seguranca, nao um recorte do que voce pediu: existe para uma lista
@@ -18,6 +18,18 @@ const MAX_QUERIES_PER_SCAN = 24;
  * de pedidos em paralelo encurta a varredura sem atropelar as fontes.
  */
 const CONCURRENCY = 6;
+/**
+ * Quantas consultas simultaneas cada fonte aguenta.
+ *
+ * Varrer as lojas escolhidas coloca mais de vinte pedidos na fila, quase todos
+ * para o mesmo site. Sem este teto eles saem em rajada, o site responde 429 e as
+ * lojas do fim da fila somem da varredura — o problema que a varredura por loja
+ * veio resolver. O limite global continua valendo: ele reparte o resto do tempo
+ * entre as outras fontes enquanto uma espera a vez.
+ */
+const CONCURRENCY_PER_PROVIDER = 2;
+/** Pausa antes de reavaliar a fila quando so restam tarefas de uma fonte ocupada. */
+const QUEUE_RETRY_MS = 250;
 
 export type MarketSearchResult = {
   offers: MarketOffer[];
@@ -32,6 +44,11 @@ export type MarketSearchRequest = {
    * as fontes procurarem so por ele.
    */
   focusTerm?: string;
+  /**
+   * Lojas que voce ligou em Lojas. A fonte que varre por loja pede a pagina de
+   * cada uma: e o unico caminho para as que nao aparecem sozinhas.
+   */
+  stores?: StoreTarget[];
   onProgress?: (progress: ScanProgress) => void;
 };
 
@@ -88,13 +105,32 @@ const interleave = (groups: SearchTask[][]): SearchTask[] => {
   return ordered;
 };
 
-const buildTasks = ({ keywords, focusTerm }: MarketSearchRequest): SearchTask[] => {
-  const term = focusTerm?.trim();
+/**
+ * Varrer loja por loja significa mais de vinte pedidos ao mesmo site. Sai direto
+ * no aplicativo e na extensao, e pela funcao do servidor no app publicado. Sem
+ * nenhum dos dois resta o leitor publico, que corta o excesso com 429 — a
+ * varredura viraria uma parede de falhas, e as lojas continuariam de fora.
+ */
+const canScanStores = () => !isWeb || hasServerProxy();
 
-  const specsFor = (provider: SearchProvider): SearchTaskSpec[] =>
-    term
-      ? (provider.buildFocusTasks ?? ((value: string) => provider.buildTasks([value])))(term)
-      : provider.buildTasks(cleanTerms(keywords));
+const buildTasks = ({ keywords, focusTerm, stores = [] }: MarketSearchRequest): SearchTask[] => {
+  const term = focusTerm?.trim();
+  const storeTargets = canScanStores() ? stores : [];
+
+  /**
+   * Busca dirigida nao varre loja: quem procura um produto quer o produto, e a
+   * vitrine de vinte lojas so atrasaria a resposta.
+   */
+  const specsFor = (provider: SearchProvider): SearchTaskSpec[] => {
+    if (term) {
+      return (provider.buildFocusTasks ?? ((value: string) => provider.buildTasks([value])))(term);
+    }
+
+    return [
+      ...provider.buildTasks(cleanTerms(keywords)),
+      ...(storeTargets.length > 0 ? (provider.buildStoreTasks?.(storeTargets) ?? []) : [])
+    ];
+  };
 
   return interleave(
     activeProviders().map((provider) =>
@@ -127,18 +163,35 @@ export const searchMarket = async (request: MarketSearchRequest): Promise<Market
   const providers: ProviderResult[] = [];
   const collected: MarketOffer[] = [];
   let completed = 0;
-  let cursor = 0;
+
+  const pending = [...tasks];
+  const inFlight = new Map<string, number>();
 
   onProgress?.({ current: 0, total: tasks.length, label: "Preparando varredura" });
 
-  const runNext = async (): Promise<void> => {
-    const taskIndex = cursor;
-    cursor += 1;
+  /** Primeira tarefa cuja fonte ainda tem vaga; a ordem intercalada faz o resto. */
+  const takeNext = () => {
+    const index = pending.findIndex(
+      (task) => (inFlight.get(task.provider.key) ?? 0) < CONCURRENCY_PER_PROVIDER
+    );
 
-    const task = tasks[taskIndex];
+    return index === -1 ? undefined : pending.splice(index, 1)[0];
+  };
+
+  const runNext = async (): Promise<void> => {
+    const task = takeNext();
+
     if (!task) {
-      return;
+      // Nada elegivel: ou a fila acabou, ou o que sobrou e de uma fonte lotada.
+      if (pending.length === 0) {
+        return;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, QUEUE_RETRY_MS));
+      return runNext();
     }
+
+    inFlight.set(task.provider.key, (inFlight.get(task.provider.key) ?? 0) + 1);
 
     const startedAt = Date.now();
     onProgress?.({ current: completed, total: tasks.length, label: task.label });
@@ -163,6 +216,7 @@ export const searchMarket = async (request: MarketSearchRequest): Promise<Market
         error: describeError(error)
       });
     } finally {
+      inFlight.set(task.provider.key, (inFlight.get(task.provider.key) ?? 1) - 1);
       completed += 1;
       onProgress?.({ current: completed, total: tasks.length, label: task.label });
     }

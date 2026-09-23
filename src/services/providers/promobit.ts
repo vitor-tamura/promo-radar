@@ -1,7 +1,14 @@
 import { MarketOffer } from "../../types";
 import { fetchPageHtml } from "../httpClient";
 import { isAppOnly, looksLikePriceError, searchPromobit } from "./promobitSearch";
-import { decodeEntities, readNextData, sanitizeListPrice, SearchProvider, SearchTaskSpec } from "./types";
+import {
+  decodeEntities,
+  readNextData,
+  sanitizeListPrice,
+  SearchProvider,
+  SearchTaskSpec,
+  StoreTarget
+} from "./types";
 
 const BASE_URL = "https://www.promobit.com.br";
 const IMAGE_HOST = "https://i.promobit.com.br";
@@ -145,6 +152,20 @@ const fetchCoupons = async (): Promise<MarketOffer[]> => {
     .filter((offer): offer is MarketOffer => Boolean(offer));
 };
 
+/**
+ * Ofertas que a comunidade garimpou numa loja especifica.
+ *
+ * As ofertas daqui nao sao marcadas como curadoria de proposito, embora venham
+ * do mesmo lugar: elas existem porque voce ligou a loja, nao porque escolheu o
+ * produto. Passando pelo filtro de palavras-chave, a loja entra no radar quando
+ * tem algo que voce pediu, em vez de despejar a vitrine inteira no feed.
+ */
+const fetchStore = async (slug: string): Promise<MarketOffer[]> => {
+  const offers = await fetchCategory(`loja/${slug}`);
+
+  return offers.map(({ curated, ...offer }) => offer);
+};
+
 const fetchCategory = async (slug: string): Promise<MarketOffer[]> => {
   const html = await fetchPageHtml(`${BASE_URL}/promocoes/${slug}/`);
   const props = readPageProps(html);
@@ -171,6 +192,8 @@ const pickCategories = (keywords: string[]): SearchTaskSpec[] => {
 
 /** Marca a consulta que vai para a busca, e nao para uma secao do site. */
 const SEARCH_PREFIX = "q:";
+/** Marca a consulta que varre a pagina de uma loja. */
+const STORE_PREFIX = "loja:";
 
 const searchTasks = (keywords: string[]): SearchTaskSpec[] =>
   keywords
@@ -200,9 +223,18 @@ export const promobitProvider: SearchProvider = {
   // Busca dirigida nao passa pelas secoes: quem procura um produto nao quer a
   // vitrine do dia junto.
   buildFocusTasks: (term) => searchTasks([term]),
+  buildStoreTasks: (stores) =>
+    stores.map((store) => ({
+      query: `${STORE_PREFIX}${store.promobitSlug}`,
+      label: `${PROVIDER_NAME}: ${store.name}`
+    })),
   search: (query) => {
     if (query.startsWith(SEARCH_PREFIX)) {
       return searchPromobit(query.slice(SEARCH_PREFIX.length));
+    }
+
+    if (query.startsWith(STORE_PREFIX)) {
+      return fetchStore(query.slice(STORE_PREFIX.length));
     }
 
     return query === COUPONS_TASK ? fetchCoupons() : fetchCategory(query);
