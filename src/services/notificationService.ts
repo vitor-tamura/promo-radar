@@ -14,6 +14,87 @@ const isWeb = Platform.OS === "web";
 
 const webNotificationsSupported = () => typeof window !== "undefined" && "Notification" in window;
 
+/** Icone do PWA. Onde o arquivo nao existir, o navegador usa o padrao dele. */
+const WEB_NOTIFICATION_ICON = "/icons/icon192.png";
+
+/**
+ * O service worker registrado desta origem, se houver.
+ *
+ * `getRegistration` resolve com undefined quando nao ha nenhum; `ready` ficaria
+ * pendente para sempre nesse caso, e o aviso nunca sairia.
+ */
+const serviceWorkerRegistration = async () => {
+  if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) {
+    return undefined;
+  }
+
+  try {
+    return await navigator.serviceWorker.getRegistration();
+  } catch {
+    return undefined;
+  }
+};
+
+type WebNotification = {
+  title: string;
+  body: string;
+  tag: string;
+  requireInteraction: boolean;
+  url?: string;
+};
+
+/**
+ * Aviso no navegador.
+ *
+ * O caminho principal e o service worker. No Android o Chrome proibe
+ * `new Notification(...)` — o construtor lanca "Illegal constructor" — porque um
+ * aviso preso a uma aba nao sobrevive a ela; so o worker pode mostra-lo. O
+ * mesmo caminho funciona no desktop, entao ele vem primeiro em todo lugar, e o
+ * clique e tratado dentro do worker, que continua vivo com a pagina fechada.
+ *
+ * O construtor fica como reserva para quando nao ha worker registrado — em
+ * desenvolvimento, onde ele e desligado de proposito — e ali so o desktop
+ * responde.
+ */
+const presentOnWeb = async ({ title, body, tag, requireInteraction, url }: WebNotification) => {
+  const options = {
+    body,
+    tag,
+    requireInteraction,
+    icon: WEB_NOTIFICATION_ICON,
+    // O worker le daqui para saber o que abrir quando clicarem no aviso.
+    data: { url }
+  };
+
+  const registration = await serviceWorkerRegistration();
+
+  if (registration) {
+    await registration.showNotification(title, options);
+    return;
+  }
+
+  try {
+    const notification = new Notification(title, options);
+
+    notification.onclick = () => {
+      window.focus();
+
+      if (url) {
+        window.open(url, "_blank", "noopener,noreferrer");
+      }
+
+      notification.close();
+    };
+  } catch {
+    // O Android recusa o construtor com "Illegal constructor", que sozinho nao
+    // diz o que fazer. Sem worker registrado nao ha outro caminho, entao o erro
+    // sai explicando de onde vem a falta.
+    throw new Error(
+      "Neste navegador o aviso precisa do service worker, que so e registrado na versao publicada."
+    );
+  }
+};
+
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowBanner: true,
@@ -90,21 +171,14 @@ const present = async ({ title, body, critical, data }: NotificationPayload) => 
       return;
     }
 
-    // tag agrupa por oferta: reabrir a mesma promocao nao empilha avisos.
-    const notification = new Notification(title, {
+    await presentOnWeb({
+      title,
       body,
+      // tag agrupa por oferta: reabrir a mesma promocao nao empilha avisos.
       tag: String(data?.dealId ?? title),
-      requireInteraction: critical
+      requireInteraction: Boolean(critical),
+      url: typeof data?.url === "string" ? data.url : undefined
     });
-
-    notification.onclick = () => {
-      window.focus();
-      const url = data?.url;
-      if (typeof url === "string") {
-        window.open(url, "_blank");
-      }
-      notification.close();
-    };
 
     return;
   }

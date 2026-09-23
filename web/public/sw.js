@@ -31,6 +31,26 @@ self.addEventListener("activate", (event) => {
   );
 });
 
+/**
+ * Clique num aviso de oferta.
+ *
+ * Quando o aviso sai por `registration.showNotification`, quem recebe o clique e
+ * o worker, nao a pagina — ela pode nem existir mais. O destino viaja no `data`
+ * do proprio aviso, posto la pelo notificationService.
+ */
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+
+  const url = event.notification.data?.url;
+
+  if (!url) {
+    return;
+  }
+
+  // waitUntil porque o worker pode ser encerrado antes de a aba abrir.
+  event.waitUntil(self.clients.openWindow(url));
+});
+
 const isStaticAsset = (url) => url.pathname.startsWith("/_next/static/") || url.pathname.startsWith("/icons/");
 
 self.addEventListener("fetch", (event) => {

@@ -123,6 +123,12 @@ ainda mostra o feed da ultima varredura. O historico de precos e as preferencias
 ficam no armazenamento do navegador, presos aquela origem — trocar de dominio
 equivale a comecar do zero.
 
+O aviso de oferta tambem sai pelo service worker, e nao pela Notification API da
+pagina: no Android o Chrome proibe `new Notification(...)` — o construtor lanca
+"Illegal constructor" — porque um aviso preso a uma aba nao sobrevive a ela. O
+mesmo caminho funciona no desktop, entao vale em todo lugar, e o clique e tratado
+dentro do worker, que continua vivo com a pagina fechada.
+
 O service worker so e registrado em producao. Ele serve o que esta em
 `/_next/static/` direto do cache, o que e seguro porque o build poe um hash no
 nome de cada arquivo; em desenvolvimento o Next serve `page.js` sem hash, e a

@@ -31,19 +31,27 @@ export const announceDeals = async (deals: Deal[]): Promise<boolean> => {
 
   const criticalDeals = fresh.filter(isCriticalDeal);
 
-  for (const deal of criticalDeals.slice(0, MAX_CRITICAL_ALERTS)) {
-    await notifyCriticalDeal(deal);
+  try {
+    for (const deal of criticalDeals.slice(0, MAX_CRITICAL_ALERTS)) {
+      await notifyCriticalDeal(deal);
+    }
+
+    if (criticalDeals.length > MAX_CRITICAL_ALERTS) {
+      await notifyScanSummary(criticalDeals.length - MAX_CRITICAL_ALERTS);
+    }
+
+    const topDeal = fresh.find((deal) => !isCriticalDeal(deal));
+
+    if (topDeal) {
+      await notifyDeal(topDeal);
+    }
+
+    return true;
+  } catch {
+    // Avisar e efeito da varredura, nao o resultado dela. Deixar o erro subir
+    // faria o app anunciar "falha na varredura" depois de encontrar as ofertas e
+    // guardar o feed — culpando a parte que deu certo. Quem quer o motivo exato
+    // usa o botao de teste em Alertas, que reporta a falha.
+    return false;
   }
-
-  if (criticalDeals.length > MAX_CRITICAL_ALERTS) {
-    await notifyScanSummary(criticalDeals.length - MAX_CRITICAL_ALERTS);
-  }
-
-  const topDeal = fresh.find((deal) => !isCriticalDeal(deal));
-
-  if (topDeal) {
-    await notifyDeal(topDeal);
-  }
-
-  return true;
 };
