@@ -1,17 +1,38 @@
 import { MarketOffer, ProviderResult, ScanProgress } from "../types";
-import { describeError, isWeb } from "./httpClient";
+import { describeError, isWeb, hasServerProxy } from "./httpClient";
 import { amazonProvider } from "./providers/amazonStore";
 import { kabumProvider } from "./providers/kabumStore";
+import { mercadoLivreProvider } from "./providers/mercadoLivre";
 import { aggregatorProviders } from "./providers/priceAggregator";
 import { promobitProvider } from "./providers/promobit";
-import { SearchProvider } from "./providers/types";
+import { SearchProvider, SearchTaskSpec } from "./providers/types";
 
-const MAX_QUERIES_PER_SCAN = 4;
-const CONCURRENCY = 4;
+/**
+ * Teto de seguranca, nao um recorte do que voce pediu: existe para uma lista
+ * colada sem querer nao virar centenas de requisicoes. Toda tag abaixo disso
+ * vira busca em todas as fontes.
+ */
+const MAX_QUERIES_PER_SCAN = 24;
+/**
+ * Consultas simultaneas. O gargalo e a espera da rede, nao a CPU, entao um punhado
+ * de pedidos em paralelo encurta a varredura sem atropelar as fontes.
+ */
+const CONCURRENCY = 6;
 
 export type MarketSearchResult = {
   offers: MarketOffer[];
   providers: ProviderResult[];
+};
+
+export type MarketSearchRequest = {
+  /** Tags configuradas em Alertas. Cada uma vira consulta em todas as fontes. */
+  keywords: string[];
+  /**
+   * Busca dirigida a um produto: substitui as tags por este termo e manda todas
+   * as fontes procurarem so por ele.
+   */
+  focusTerm?: string;
+  onProgress?: (progress: ScanProgress) => void;
 };
 
 /**
@@ -23,12 +44,19 @@ const allProviders: SearchProvider[] = [
   ...aggregatorProviders,
   amazonProvider,
   kabumProvider,
+  mercadoLivreProvider,
   promobitProvider
 ];
 
 export const allProviderCount = allProviders.length;
 
-export const activeProviders = () => allProviders.filter((provider) => !isWeb || provider.availableOnWeb);
+/**
+ * No navegador sem servidor proprio a politica de origem barra as fontes que
+ * dependem de acesso direto. Com o proxy da propria origem (o app publicado na
+ * Vercel) a chamada sai do servidor e todas voltam a valer.
+ */
+export const activeProviders = () =>
+  allProviders.filter((provider) => !isWeb || hasServerProxy() || provider.availableOnWeb);
 
 type SearchTask = {
   provider: SearchProvider;
@@ -36,11 +64,42 @@ type SearchTask = {
   label: string;
 };
 
-const buildTasks = (keywords: string[]): SearchTask[] => {
-  const queries = keywords.map((keyword) => keyword.trim()).filter(Boolean).slice(0, MAX_QUERIES_PER_SCAN);
+const cleanTerms = (terms: string[]) =>
+  terms.map((term) => term.trim()).filter(Boolean).slice(0, MAX_QUERIES_PER_SCAN);
 
-  return activeProviders().flatMap((provider) =>
-    provider.buildTasks(queries).map((task) => ({ provider, ...task }))
+/**
+ * Intercala as consultas por rodada em vez de esgotar uma fonte antes de comecar
+ * a proxima: com muitas tags, a primeira rodada ja devolve resultado de todas as
+ * fontes, e uma fonte lenta no fim da fila nao segura as outras.
+ */
+const interleave = (groups: SearchTask[][]): SearchTask[] => {
+  const longest = groups.reduce((max, group) => Math.max(max, group.length), 0);
+  const ordered: SearchTask[] = [];
+
+  for (let index = 0; index < longest; index += 1) {
+    groups.forEach((group) => {
+      const task = group[index];
+      if (task) {
+        ordered.push(task);
+      }
+    });
+  }
+
+  return ordered;
+};
+
+const buildTasks = ({ keywords, focusTerm }: MarketSearchRequest): SearchTask[] => {
+  const term = focusTerm?.trim();
+
+  const specsFor = (provider: SearchProvider): SearchTaskSpec[] =>
+    term
+      ? (provider.buildFocusTasks ?? ((value: string) => provider.buildTasks([value])))(term)
+      : provider.buildTasks(cleanTerms(keywords));
+
+  return interleave(
+    activeProviders().map((provider) =>
+      specsFor(provider).map((spec) => ({ provider, ...spec }))
+    )
   );
 };
 
@@ -62,11 +121,9 @@ const dedupeOffers = (offers: MarketOffer[]) => {
   return [...byProduct.values()];
 };
 
-export const searchMarket = async (
-  keywords: string[],
-  onProgress?: (progress: ScanProgress) => void
-): Promise<MarketSearchResult> => {
-  const tasks = buildTasks(keywords);
+export const searchMarket = async (request: MarketSearchRequest): Promise<MarketSearchResult> => {
+  const { onProgress } = request;
+  const tasks = buildTasks(request);
   const providers: ProviderResult[] = [];
   const collected: MarketOffer[] = [];
   let completed = 0;

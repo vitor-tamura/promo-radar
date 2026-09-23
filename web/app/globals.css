@@ -1,0 +1,29 @@
+/*
+ * O app desenha a tela inteira, entao o documento so precisa sair da frente:
+ * sem margem, sem rolagem propria e com altura real do dispositivo, para que a
+ * lista role dentro do app e nao a pagina toda por baixo dele.
+ */
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background-color: #f7faf9;
+  overscroll-behavior-y: none;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+#__next,
+body > div {
+  height: 100%;
+}
+
+/* O toque em botao nao precisa do realce cinza do WebKit: o app ja anima o press. */
+* {
+  -webkit-tap-highlight-color: transparent;
+}

@@ -37,6 +37,22 @@ const normalize = (value: string) =>
 const formatBrl = (value: number) =>
   `R$ ${value.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
+/**
+ * Busca dirigida casa por todas as palavras do termo, em qualquer ordem. Quem
+ * digita "ssd nvme 2tb" quer os tres juntos, e a frase inteira quase nunca
+ * aparece literalmente no titulo do anuncio.
+ */
+const matchesFocus = (offer: MarketOffer, term: string) => {
+  const words = normalize(term).split(/\s+/).filter(Boolean);
+
+  if (words.length === 0) {
+    return true;
+  }
+
+  const searchable = normalize(`${offer.title} ${offer.store} ${offer.category ?? ""}`);
+  return words.every((word) => searchable.includes(word));
+};
+
 const matchesKeyword = (offer: MarketOffer, keywords: string[]) => {
   if (keywords.length === 0) {
     return true;
@@ -217,7 +233,13 @@ const scoreDeal = (offer: MarketOffer, classification: Classification) => {
   return Math.max(1, Math.min(99, Math.round(score)));
 };
 
-export const shouldAlertDeal = (deal: Deal, settings: AlertSettings) => {
+export const shouldAlertDeal = (deal: Deal, settings: AlertSettings, focused = false) => {
+  // Numa busca dirigida quem escolheu o produto foi voce: as faixas de desconto
+  // existem para filtrar o feed automatico, nao para esconder o que voce pediu.
+  if (focused) {
+    return true;
+  }
+
   if (deal.kind === "coupon") {
     return settings.notifyCoupons;
   }
@@ -294,16 +316,32 @@ const describeImport = (offer: MarketOffer, { brlPerUsd, liveRate, icmsPercent }
   };
 };
 
+export type ScanRequest = {
+  onProgress?: (progress: ScanProgress) => void;
+  /**
+   * Varredura dirigida a um produto: todas as fontes procuram so por este termo
+   * e nada entra no resultado sem casar com ele, nem mesmo a curadoria.
+   */
+  focusTerm?: string;
+};
+
 export const scanDeals = async (
   stores: StorePreference[],
   settings: AlertSettings,
   knownProductKeys: Set<string> = new Set(),
-  onProgress?: (progress: ScanProgress) => void
+  { onProgress, focusTerm }: ScanRequest = {}
 ): Promise<ScanOutcome> => {
   const startedAt = Date.now();
-  const { offers, providers } = await searchMarket(settings.keywords, onProgress);
+  const focus = focusTerm?.trim();
+  const { offers, providers } = await searchMarket({
+    keywords: settings.keywords,
+    focusTerm: focus,
+    onProgress
+  });
 
-  const usedFallback = offers.length === 0;
+  // A busca dirigida nao cai no catalogo de demonstracao: ele nao tem relacao
+  // nenhuma com o produto pedido, e uma lista vazia e a resposta honesta.
+  const usedFallback = offers.length === 0 && !focus;
   const effectiveOffers = usedFallback ? demoDeals : offers;
 
   if (!usedFallback) {
@@ -313,9 +351,11 @@ export const scanDeals = async (
   const relevantOffers = effectiveOffers.filter(
     (offer) =>
       !hasBlockedTerm(offer, settings.blockedTerms) &&
-      // Oferta de curadoria ja e uma promocao garimpada: nao passa pelo filtro
-      // de palavras-chave, que existe para direcionar a busca por produto.
-      (offer.curated || matchesKeyword(offer, settings.keywords)) &&
+      (focus
+        ? matchesFocus(offer, focus)
+        : // Oferta de curadoria ja e uma promocao garimpada: nao passa pelo filtro
+          // de palavras-chave, que existe para direcionar a busca por produto.
+          offer.curated || matchesKeyword(offer, settings.keywords)) &&
       isStoreAllowed(offer, stores, settings.includeUnlistedStores)
   );
 
@@ -340,7 +380,7 @@ export const scanDeals = async (
         taxContext
       )
     )
-    .filter((deal) => shouldAlertDeal(deal, settings))
+    .filter((deal) => shouldAlertDeal(deal, settings, Boolean(focus)))
     .sort((a, b) => b.score - a.score)
     .slice(0, MAX_FEED_SIZE);
 
@@ -350,6 +390,7 @@ export const scanDeals = async (
     collected: effectiveOffers.length,
     durationMs: Date.now() - startedAt,
     providers,
-    usedFallback
+    usedFallback,
+    focusTerm: focus
   };
 };

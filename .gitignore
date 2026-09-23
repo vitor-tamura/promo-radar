@@ -17,6 +17,12 @@ promo-radar-extensao*.zip
 # APK gerado
 dist-apk/
 
+# build do app web (Next)
+web/.next/
+web/out/
+web/next-env.d.ts
+.vercel/
+
 # projeto nativo, recriado por `npx expo prebuild`
 android/
 ios/

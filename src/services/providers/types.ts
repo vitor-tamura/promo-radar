@@ -25,6 +25,12 @@ export type SearchProvider = {
   availableOnWeb: boolean;
   /** Cada provider decide como transformar as palavras-chave em consultas. */
   buildTasks: (keywords: string[]) => SearchTaskSpec[];
+  /**
+   * Consultas de uma busca dirigida a um produto so. Quem nao define cai em
+   * buildTasks com o termo sozinho; quem tem busca propria (o curador, que no
+   * feed normal navega por categoria) troca de rota aqui.
+   */
+  buildFocusTasks?: (term: string) => SearchTaskSpec[];
   search: (query: string) => Promise<MarketOffer[]>;
 };
 

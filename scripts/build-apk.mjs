@@ -9,7 +9,7 @@
  * Saida: dist-apk/promo-radar-<versao>.apk
  */
 
-import { execFileSync } from "node:child_process";
+import { execSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -17,8 +17,17 @@ import { fileURLToPath } from "node:url";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const outDir = resolve(root, "dist-apk");
 
+/**
+ * No Windows os executaveis do npm sao arquivos .cmd, que so rodam pelo
+ * interpretador de comandos: desde o Node 22 o execFile se recusa a abri-los
+ * direto. Por isso a chamada vai montada como linha de comando, com cada
+ * argumento entre aspas para sobreviver a um caminho com espaco. O comando em si
+ * fica sem aspas, que e como o cmd.exe acha o .cmd. Argumentos todos literais.
+ */
+const quote = (value) => `"${String(value).replace(/"/g, String.raw`\"`)}"`;
+
 const run = (command, args, cwd = root) =>
-  execFileSync(command, args, { cwd, stdio: "inherit" });
+  execSync([command, ...args.map(quote)].join(" "), { cwd, stdio: "inherit" });
 
 const step = (message) => console.log(`\n[36m▸ ${message}[0m`);
 

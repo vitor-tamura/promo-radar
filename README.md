@@ -1,13 +1,72 @@
 # Promo Radar
 
 Radar de promocao, cupom e erro de preco nas lojas brasileiras. Varre agregadores
-(Buscape, Zoom), busca direto na Amazon e no KaBuM, acompanha a curadoria do
-Promobit, compara com o historico de precos do proprio aparelho e avisa quando
-aparece uma queda fora do padrao.
+(Buscape, Zoom), busca direto na Amazon e no KaBuM, le a vitrine de ofertas do
+Mercado Livre, acompanha a curadoria do Promobit, compara com o historico de
+precos do proprio aparelho e avisa quando aparece uma queda fora do padrao.
 
 O mesmo codigo roda em tres lugares: aplicativo Android, extensao do Chrome e
-aplicativo web. O que muda entre eles fica em `src/platform/` e nos adaptadores
-de armazenamento e notificacao; a camada de servicos e a interface sao as mesmas.
+aplicativo web publicado na Vercel. O que muda entre eles fica em `src/platform/`
+e nos adaptadores de armazenamento e notificacao; a camada de servicos e a
+interface sao as mesmas.
+
+## Como a busca funciona
+
+Cada termo em **Alertas › O que buscar** vira uma consulta em todas as fontes que
+sabem buscar por palavra. Nao ha recorte nos primeiros termos: a lista inteira
+roda, e o unico teto (24 termos) existe para uma lista colada sem querer nao
+virar centenas de requisicoes. Quanto mais termos, mais longa a varredura.
+
+Duas fontes nao aceitam termo de busca e entram por categoria, escolhida a partir
+das suas tags: a vitrine de ofertas do Mercado Livre, que bloqueia a leitura da
+busca por palavra, e as secoes do Promobit, que trazem a garimpagem da
+comunidade. O Promobit tambem atende tag por tag, pela mesma API que a busca do
+site usa.
+
+A **lupa**, no topo do radar, faz as duas coisas: enquanto voce digita, recorta o
+que ja esta na tela; ao enviar, dispara uma varredura dirigida aquele produto.
+Nessa varredura nada entra sem casar com todas as palavras do termo — nem a
+curadoria, que no feed normal passa direto — e as faixas de desconto nao se
+aplicam: se voce pediu o produto, voce quer ver o que existe dele. O resultado
+fica ao lado do feed, e "Voltar ao radar" devolve a lista de antes.
+
+## Aplicativo web (Vercel)
+
+`web/` e um app Next que serve a mesma interface do aplicativo: nada de
+reescrita, o `App.tsx` e o `src/` da raiz sao importados de la e os componentes
+do react-native viram DOM pelo react-native-web.
+
+```bash
+npm run web         # desenvolvimento em http://localhost:3000
+npm run web:build   # build de producao
+```
+
+### O proxy, e por que ele muda tudo
+
+No navegador a politica de origem barra o acesso direto as lojas, e sem servidor
+proprio o app cai num leitor publico que cobra dezenas de segundos por pagina,
+com Amazon e KaBuM fora do alcance. Publicado na Vercel, a rota `/api/fetch`
+repete a busca do lado do servidor, onde essa politica nao existe: o app web
+alcanca exatamente as mesmas fontes que a extensao, na mesma velocidade.
+
+A rota so aceita GET para os dominios que o radar consulta. Sem essa lista o seu
+deploy viraria um proxy aberto, que qualquer um na internet poderia apontar para
+onde quisesse usando o seu dominio como fachada.
+
+### Instalar no celular
+
+O app traz manifesto e service worker: em **Adicionar a tela de inicio** ele
+instala como aplicativo, abre em tela cheia sem barra de endereco e, sem sinal,
+ainda mostra o feed da ultima varredura. O historico de precos e as preferencias
+ficam no armazenamento do navegador, presos aquela origem — trocar de dominio
+equivale a comecar do zero.
+
+### Publicar
+
+Importe o repositorio na Vercel e defina **Root Directory** como `web`. Deixe
+ligada a opcao de incluir arquivos de fora do Root Directory, que vem ligada por
+padrao: o app importa `App.tsx` e `src/` da raiz do projeto. O resto — framework,
+comando de build — a Vercel detecta sozinha.
 
 ## Extensao do Chrome
 
@@ -45,9 +104,10 @@ O que a extensao faz alem do app web:
 - **Varre com o navegador fechado.** Um service worker acorda por `chrome.alarms`
   no intervalo escolhido em Alertas, varre, avisa e escreve o contador no icone.
 - **Alcanca as lojas que o navegador bloqueia.** As permissoes de host do
-  manifesto liberam o acesso direto a Amazon e ao KaBuM, que no app web ficam de
-  fora por politica de origem. Uma varredura completa cai de dezenas de segundos
-  (passando por proxy de leitura) para poucos segundos.
+  manifesto liberam o acesso direto a Amazon e ao KaBuM, que numa pagina comum
+  ficariam de fora por politica de origem. O app publicado na Vercel chega no
+  mesmo lugar por outro caminho, buscando pelo servidor; quem fica para tras e
+  so o app web servido sem servidor proprio, que depende do leitor publico.
 - **Popup e aba.** O icone abre um popup de 420x600; o menu tem "Abrir em aba"
   para quando a lista cresce.
 
@@ -117,20 +177,29 @@ a chave publica de depuracao.
 ## Desenvolvimento
 
 ```bash
-npm start          # Metro, para app e web
-npm run typecheck  # tsc --noEmit
-npm run icons      # regera os icones a partir de scripts/generate-icons.py
+npm start              # Metro, para o aplicativo
+npm run expo:web       # preview web pelo Expo, que e o que a extensao empacota
+npm run typecheck      # tsc --noEmit (raiz)
+npm run web:typecheck  # tsc --noEmit (app Next; precisa de npm install em web/)
+npm run icons          # regera os icones a partir de scripts/generate-icons.py
 ```
+
+O app Next tem o proprio `package.json` e o proprio `node_modules`, com copias de
+react e react-dom. O Metro ignora `web/node_modules` pela blockList em
+`metro.config.js`: sem isso ele trataria as copias como pacotes duplicados e as
+builds do aplicativo e da extensao parariam de resolver.
 
 ## Estrutura
 
 ```
 App.tsx                    interface principal
 src/services/              varredura, classificacao, notificacao, impostos
-src/services/providers/    um modulo por fonte (Buscape, Zoom, Amazon, KaBuM, Promobit)
+src/services/providers/    um modulo por fonte (Buscape, Zoom, Amazon, KaBuM,
+                           Mercado Livre, Promobit)
 src/storage/               preferencias, historico de precos e cache do feed
 src/platform/extension.ts  ponte com as APIs do Chrome (inerte fora da extensao)
 extension/                 manifesto, service worker e adaptadores da extensao
+web/                       app Next publicado na Vercel: casca, proxy e PWA
 plugins/                   config plugins do Expo aplicados no prebuild
 scripts/                   builds da extensao e do APK, geracao de icones
 ```

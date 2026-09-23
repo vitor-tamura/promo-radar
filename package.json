@@ -7,13 +7,16 @@
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
-    "web": "expo start --web",
+    "web": "npm --prefix web run dev",
+    "web:build": "npm --prefix web run build",
+    "web:typecheck": "npm --prefix web run typecheck",
+    "expo:web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "icons": "python3 scripts/generate-icons.py",
     "extension": "node scripts/build-extension.mjs",
     "extension:install": "npm run extension && node scripts/install-extension.mjs",
-    "apk": "node scripts/build-apk.mjs",
-    "extension:zip": "npm run extension && node scripts/pack-extension.mjs"
+    "extension:zip": "npm run extension && node scripts/pack-extension.mjs",
+    "apk": "node scripts/build-apk.mjs"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",

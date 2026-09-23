@@ -29,6 +29,12 @@ ADAPTIVE_SAFE_RATIO = 0.66
 ROOT = Path(__file__).resolve().parent.parent
 ICONS_DIR = ROOT / "extension" / "icons"
 ASSETS_DIR = ROOT / "assets"
+WEB_ICONS_DIR = ROOT / "web" / "public" / "icons"
+WEB_PUBLIC_DIR = ROOT / "web" / "public"
+
+# Tamanhos que o manifesto do app web declara, mais o atalho do iPhone.
+WEB_SIZES = (192, 512)
+APPLE_TOUCH_SIZE = 180
 
 
 def draw_art(size: int) -> Image.Image:
@@ -97,6 +103,19 @@ def main() -> None:
 
     icon.resize((48, 48), Image.LANCZOS).save(ASSETS_DIR / "favicon.png")
     print("assets/favicon.png")
+
+    WEB_ICONS_DIR.mkdir(parents=True, exist_ok=True)
+
+    for size in WEB_SIZES:
+        icon.resize((size, size), Image.LANCZOS).save(WEB_ICONS_DIR / f"icon{size}.png")
+        print(f"web/public/icons/icon{size}.png")
+
+    # O iPhone nao le o manifesto para escolher o icone do atalho: ele procura
+    # este arquivo, por nome, na raiz do site.
+    icon.resize((APPLE_TOUCH_SIZE, APPLE_TOUCH_SIZE), Image.LANCZOS).save(
+        WEB_PUBLIC_DIR / "apple-touch-icon.png"
+    )
+    print("web/public/apple-touch-icon.png")
 
 
 if __name__ == "__main__":

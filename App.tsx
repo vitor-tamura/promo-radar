@@ -45,6 +45,7 @@ import { AliexpressScreen } from "./src/ui/AliexpressScreen";
 import { AppMenu } from "./src/ui/AppMenu";
 import { ALL_CATEGORIES, CategoryFilter } from "./src/ui/CategoryFilter";
 import { SortButton, SortMode, sortDeals } from "./src/ui/SortButton";
+import { filterByQuery, SearchBanner, SearchBar } from "./src/ui/SearchBar";
 import { formatInterval, scanIntervals } from "./src/ui/scanInterval";
 import { DealCard } from "./src/ui/DealCard";
 import { ScanStatusPanel } from "./src/ui/ScanStatusPanel";
@@ -68,6 +69,13 @@ export default function App() {
   const [category, setCategory] = useState<string>(ALL_CATEGORIES);
   const [sortMode, setSortMode] = useState<SortMode>("relevance");
   const [deals, setDeals] = useState<Deal[]>([]);
+  const [searchDraft, setSearchDraft] = useState("");
+  /**
+   * Resultado de uma busca dirigida. Fica ao lado do feed em vez de substitui-lo:
+   * procurar um produto nao pode apagar o que o radar ja tinha encontrado.
+   */
+  const [focusTerm, setFocusTerm] = useState<string>();
+  const [focusDeals, setFocusDeals] = useState<Deal[]>([]);
   const [stores, setStores] = useState<StorePreference[]>(defaultStorePreferences);
   const [settings, setSettings] = useState<AlertSettings>(defaultSettings);
   const [isScanning, setIsScanning] = useState(false);
@@ -132,9 +140,18 @@ export default function App() {
     []
   );
 
+  /** O que a lista mostra: o resultado da busca, quando houver, ou o feed do radar. */
+  const sourceDeals = focusTerm ? focusDeals : deals;
+
+  // O texto digitado recorta a lista na hora, antes mesmo de ir as fontes.
+  const dealsByQuery = useMemo(
+    () => filterByQuery(sourceDeals, searchDraft),
+    [searchDraft, sourceDeals]
+  );
+
   const dealsByKind = useMemo(
-    () => (filter === "all" ? deals : deals.filter((deal) => deal.kind === filter)),
-    [deals, filter]
+    () => (filter === "all" ? dealsByQuery : dealsByQuery.filter((deal) => deal.kind === filter)),
+    [dealsByQuery, filter]
   );
 
   /** Categorias presentes no recorte atual, da maior para a menor. */
@@ -163,14 +180,16 @@ export default function App() {
     return sortDeals(byCategory, sortMode);
   }, [activeCategory, dealsByKind, sortMode]);
 
+  // Contagem sobre o mesmo recorte que a lista usa, para as abas nao prometerem
+  // ofertas que a busca ja tirou da frente.
   const counts = useMemo(
     () => ({
-      all: deals.length,
-      promo: deals.filter((deal) => deal.kind === "promo").length,
-      coupon: deals.filter((deal) => deal.kind === "coupon").length,
-      bug: deals.filter((deal) => deal.kind === "bug").length
+      all: dealsByQuery.length,
+      promo: dealsByQuery.filter((deal) => deal.kind === "promo").length,
+      coupon: dealsByQuery.filter((deal) => deal.kind === "coupon").length,
+      bug: dealsByQuery.filter((deal) => deal.kind === "bug").length
     }),
-    [deals]
+    [dealsByQuery]
   );
 
   const activeStores = useMemo(() => stores.filter((store) => store.enabled).length, [stores]);
@@ -232,48 +251,102 @@ export default function App() {
     }
   };
 
-  const runScan = useCallback(async () => {
-    if (isScanningRef.current) {
-      return;
-    }
+  /**
+   * Com `focus` a varredura vai atras de um produto so e o resultado fica na
+   * busca; sem ele e o radar de sempre, que atualiza o feed, grava o cache e
+   * dispara os alertas.
+   */
+  const runScan = useCallback(
+    async (focus?: string) => {
+      if (isScanningRef.current) {
+        return;
+      }
 
-    isScanningRef.current = true;
-    clearTimeout(dismissTimerRef.current);
-    setIsScanning(true);
-    setOutcome(undefined);
-    setProgress({ current: 0, total: 1, label: "Preparando varredura" });
+      const term = focus?.trim();
 
-    try {
-      const knownProductKeys = new Set(deals.map((deal) => deal.productKey));
-      const result = await scanDeals(stores, settings, knownProductKeys, setProgress);
+      isScanningRef.current = true;
+      clearTimeout(dismissTimerRef.current);
+      setIsScanning(true);
+      setOutcome(undefined);
+      setProgress({ current: 0, total: 1, label: "Preparando varredura" });
 
-      setDeals(result.deals);
-      setOutcome(result);
-      setTrackedProducts(await countTrackedProducts());
+      try {
+        const previous = term ? focusDeals : deals;
+        const knownProductKeys = new Set(previous.map((deal) => deal.productKey));
+        const result = await scanDeals(stores, settings, knownProductKeys, {
+          onProgress: setProgress,
+          focusTerm: term
+        });
 
-      // O catalogo de demonstracao nao vale como feed guardado: ele existe so
-      // para a tela nao ficar vazia quando nenhuma fonte respondeu.
-      if (!result.usedFallback) {
-        await saveFeed(result.deals, result.newCount);
+        setOutcome(result);
+        setTrackedProducts(await countTrackedProducts());
 
-        if (await announceDeals(result.deals)) {
-          setNotificationsReady(true);
+        if (term) {
+          setFocusTerm(term);
+          setFocusDeals(result.deals);
+        } else {
+          setFocusTerm(undefined);
+          setDeals(result.deals);
+
+          // O catalogo de demonstracao nao vale como feed guardado: ele existe so
+          // para a tela nao ficar vazia quando nenhuma fonte respondeu.
+          if (!result.usedFallback) {
+            await saveFeed(result.deals, result.newCount);
+
+            if (await announceDeals(result.deals)) {
+              setNotificationsReady(true);
+            }
+          }
+        }
+
+        dismissTimerRef.current = setTimeout(() => setOutcome(undefined), RESULT_PANEL_TIMEOUT_MS);
+      } catch {
+        showMessage("Falha na varredura", "Nao consegui consultar as fontes agora.");
+      } finally {
+        isScanningRef.current = false;
+        setIsScanning(false);
+        setProgress(undefined);
+
+        // A busca dirigida nao renovou o feed, entao nao adia o proximo ciclo.
+        if (settings.autoScanEnabled && !term) {
+          setNextScanAt(Date.now() + settings.autoScanIntervalMinutes * 60 * 1000);
         }
       }
+    },
+    [deals, focusDeals, settings, stores]
+  );
 
-      dismissTimerRef.current = setTimeout(() => setOutcome(undefined), RESULT_PANEL_TIMEOUT_MS);
-    } catch {
-      showMessage("Falha na varredura", "Nao consegui consultar as fontes agora.");
-    } finally {
-      isScanningRef.current = false;
-      setIsScanning(false);
-      setProgress(undefined);
+  const clearSearch = useCallback(() => {
+    setSearchDraft("");
+    setFocusTerm(undefined);
+    setFocusDeals([]);
+  }, []);
 
-      if (settings.autoScanEnabled) {
-        setNextScanAt(Date.now() + settings.autoScanIntervalMinutes * 60 * 1000);
-      }
+  /** A lista vazia diz o que fazer, e isso muda conforme por que ela esta vazia. */
+  const emptyState = useMemo(() => {
+    if (focusTerm) {
+      return {
+        title: `Nada para "${focusTerm}"`,
+        text: "Nenhuma fonte tem promocao deste produto agora. Tente um termo mais curto ou deixe o radar avisar quando aparecer."
+      };
     }
-  }, [deals, settings, stores]);
+
+    if (searchDraft.trim() && sourceDeals.length > 0) {
+      return {
+        title: "Nada no feed com esse termo",
+        text: "Toque na lupa para mandar as fontes procurarem este produto agora."
+      };
+    }
+
+    if (sourceDeals.length === 0) {
+      return {
+        title: "Nenhuma varredura ainda",
+        text: "Toque em analisar. O radar busca direto na Amazon, no KaBuM e nas ofertas do Mercado Livre, usa agregadores para alcancar Magalu, Casas Bahia, Ponto e Extra, e acompanha promocao, cupom e erro de preco no Promobit."
+      };
+    }
+
+    return { title: "Nada neste filtro", text: "Troque a aba ou rode uma nova analise." };
+  }, [focusTerm, searchDraft, sourceDeals.length]);
 
   // Reagenda o ciclo sempre que a analise automatica muda de estado ou intervalo.
   useEffect(() => {
@@ -372,7 +445,8 @@ export default function App() {
 
           <Pressable
             style={[styles.scanButton, isScanning && styles.scanButtonBusy]}
-            onPress={runScan}
+            // Sem o wrapper o evento do toque chegaria como termo de busca.
+            onPress={() => runScan()}
             disabled={isScanning}
           >
             {isScanning ? (
@@ -391,6 +465,18 @@ export default function App() {
               outcome={outcome}
               onDismiss={() => setOutcome(undefined)}
             />
+
+            <SearchBar
+              value={searchDraft}
+              onChangeText={setSearchDraft}
+              onSubmit={() => runScan(searchDraft)}
+              onClear={clearSearch}
+              busy={isScanning}
+            />
+
+            {focusTerm ? (
+              <SearchBanner term={focusTerm} count={counts.all} onDismiss={clearSearch} />
+            ) : null}
 
             <View style={styles.segmentedWrapper}>
               <SegmentedControl
@@ -422,14 +508,8 @@ export default function App() {
               ItemSeparatorComponent={() => <View style={styles.itemGap} />}
               ListEmptyComponent={
                 <View style={styles.emptyState}>
-                  <Text style={styles.emptyTitle}>
-                    {deals.length === 0 ? "Nenhuma varredura ainda" : "Nada neste filtro"}
-                  </Text>
-                  <Text style={styles.emptyText}>
-                    {deals.length === 0
-                      ? "Toque em analisar. O radar busca direto na Amazon e no KaBuM, usa agregadores para alcancar Magalu, Casas Bahia, Ponto e Extra, e acompanha promocao, cupom e erro de preco no Promobit."
-                      : "Troque a aba ou rode uma nova analise."}
-                  </Text>
+                  <Text style={styles.emptyTitle}>{emptyState.title}</Text>
+                  <Text style={styles.emptyText}>{emptyState.text}</Text>
                 </View>
               }
             />
@@ -618,8 +698,9 @@ export default function App() {
 
               <Text style={styles.inputLabel}>O que buscar</Text>
               <Text style={styles.fieldHint}>
-                Cada termo vira uma busca, ate quatro por varredura. As promocoes do Promobit chegam por
-                categoria, independente destes termos.
+                Cada termo vira uma busca em todas as fontes, sem limite pratico de quantidade: quanto mais
+                termos, mais longa a varredura. Alem deles, a vitrine do Mercado Livre e a curadoria do
+                Promobit chegam por categoria. Para procurar um produto agora, use a lupa no topo do radar.
               </Text>
               <TextInput
                 value={keywordDraft}

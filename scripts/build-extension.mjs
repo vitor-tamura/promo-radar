@@ -11,7 +11,7 @@
  * chrome://extensions com o modo desenvolvedor ligado.
  */
 
-import { execFileSync } from "node:child_process";
+import { execSync } from "node:child_process";
 import {
   cpSync,
   existsSync,
@@ -28,8 +28,22 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const outDir = resolve(root, "dist-extension");
 const extensionDir = resolve(root, "extension");
 
+/**
+ * No Windows os executaveis do npm sao arquivos .cmd, que so rodam pelo
+ * interpretador de comandos: desde o Node 22 o execFile se recusa a abri-los
+ * direto, e a build nem comecava. Por isso a chamada vai montada como linha de
+ * comando, com cada argumento entre aspas para sobreviver a um caminho com
+ * espaco. Os argumentos sao todos literais deste arquivo.
+ */
+const quote = (value) => `"${String(value).replace(/"/g, '\\"')}"`;
+
 const run = (command, args, env = {}) => {
-  execFileSync(command, args, { cwd: root, stdio: "inherit", env: { ...process.env, ...env } });
+  // O comando vai sem aspas: o cmd.exe usa o nome cru para achar o .cmd do npm.
+  execSync([command, ...args.map(quote)].join(" "), {
+    cwd: root,
+    stdio: "inherit",
+    env: { ...process.env, ...env }
+  });
 };
 
 const step = (message) => console.log(`\n[36m▸ ${message}[0m`);

@@ -28,6 +28,8 @@
     "https://www.buscape.com.br/*",
     "https://www.zoom.com.br/*",
     "https://www.promobit.com.br/*",
+    "https://api.promobit.com.br/*",
+    "https://www.mercadolivre.com.br/*",
     "https://www.amazon.com.br/*",
     "https://www.kabum.com.br/*",
     "https://servicespub.prod.api.aws.grupokabum.com.br/*",

@@ -12,6 +12,8 @@ const READER_PROXY = "https://r.jina.ai/";
 
 const DIRECT_TIMEOUT_MS = 15000;
 const PROXY_TIMEOUT_MS = 45000;
+/** A funcao do servidor busca direto, sem a demora do leitor pelo caminho. */
+const SERVER_PROXY_TIMEOUT_MS = 30000;
 
 export class HttpError extends Error {
   constructor(message: string) {
@@ -26,6 +28,22 @@ export class HttpError extends Error {
  * como no app instalado, e as fontes que dependem de acesso direto ficam ativas.
  */
 export const isWeb = Platform.OS === "web" && !isExtension;
+
+/**
+ * Endpoint da propria origem que repete a busca do lado do servidor.
+ *
+ * Quem tem um servidor proprio nao precisa do leitor: o app publicado na Vercel
+ * registra aqui a sua rota, e dali em diante a chamada sai de la, onde a politica
+ * de origem nao se aplica. E o que iguala o app web a extensao, inclusive nas
+ * lojas que so respondem ao acesso direto.
+ */
+let serverProxyPath: string | undefined;
+
+export const configureServerProxy = (path: string | undefined) => {
+  serverProxyPath = path?.trim() || undefined;
+};
+
+export const hasServerProxy = () => Boolean(serverProxyPath);
 
 const fetchWithTimeout = async (url: string, timeoutMs: number, headers: Record<string, string>) => {
   const controller = new AbortController();
@@ -63,6 +81,17 @@ const fetchThroughProxy = (url: string) =>
     "x-return-format": "html"
   });
 
+/**
+ * A funcao do servidor busca com os mesmos cabecalhos do acesso direto; o Accept
+ * viaja como cabecalho proprio para nao se confundir com o da nossa requisicao.
+ */
+const fetchThroughServer = (url: string, accept: string) =>
+  fetchWithTimeout(
+    `${serverProxyPath}?url=${encodeURIComponent(url)}`,
+    SERVER_PROXY_TIMEOUT_MS,
+    { "x-promo-accept": accept }
+  );
+
 type FetchOptions = {
   /**
    * Alguns endpoints (APIs de loja) so respondem ao acesso direto e devolvem erro
@@ -74,6 +103,11 @@ type FetchOptions = {
 /** Busca o HTML de uma pagina publica. */
 export const fetchPageHtml = async (url: string, options: FetchOptions = {}): Promise<string> => {
   const allowProxy = options.allowProxy ?? true;
+
+  // Com servidor proprio a pagina vem de la, inteira e sem restricao de origem.
+  if (serverProxyPath) {
+    return fetchThroughServer(url, "text/html,application/xhtml+xml");
+  }
 
   if (isWeb) {
     if (!allowProxy) {
@@ -94,9 +128,15 @@ export const fetchPageHtml = async (url: string, options: FetchOptions = {}): Pr
   }
 };
 
-/** Busca um endpoint JSON. Sempre direto: proxies quebram o corpo da resposta. */
+/**
+ * Busca um endpoint JSON. O leitor de texto quebraria o corpo da resposta, entao
+ * so o acesso direto (ou o proxy da propria origem, que repassa o corpo intacto)
+ * serve aqui.
+ */
 export const fetchJson = async <T>(url: string): Promise<T> => {
-  const body = await fetchDirect(url, "application/json");
+  const body = serverProxyPath
+    ? await fetchThroughServer(url, "application/json")
+    : await fetchDirect(url, "application/json");
 
   try {
     return JSON.parse(body) as T;

@@ -1,5 +1,6 @@
 import { MarketOffer } from "../../types";
 import { fetchPageHtml } from "../httpClient";
+import { isAppOnly, looksLikePriceError, searchPromobit } from "./promobitSearch";
 import { decodeEntities, readNextData, sanitizeListPrice, SearchProvider, SearchTaskSpec } from "./types";
 
 const BASE_URL = "https://www.promobit.com.br";
@@ -63,19 +64,6 @@ type PromobitPageProps = {
 const readPageProps = (html: string): PromobitPageProps =>
   ((readNextData(html) as any)?.props?.pageProps ?? {}) as PromobitPageProps;
 
-/** A comunidade sinaliza erro de preco no proprio titulo da oferta. */
-const PRICE_ERROR_PATTERN = /erro\s+de\s+pre|pre[cç]o\s+bugad|bug\s+de\s+pre|pre[cç]o\s+errad/i;
-
-export const looksLikePriceError = (title: string) => PRICE_ERROR_PATTERN.test(title);
-
-/**
- * O Promobit marca com o selo "APP" a oferta cujo preco ou cupom so vale dentro
- * do aplicativo da loja. Cobre os dois casos: preco exclusivo do app e cupom que
- * so funciona por la.
- */
-const isAppOnlyOffer = (tags: PromobitTag[] | undefined) =>
-  Boolean(tags?.some((tag) => tag.name?.trim().toUpperCase() === "APP"));
-
 /**
  * O site usa 0,01 como marcador de "sem preco proprio" em ofertas que na verdade
  * sao cupons ou selecoes de loja. Abaixo disso nao ha preco para exibir.
@@ -110,7 +98,7 @@ const toOffer = (raw: PromobitOffer): MarketOffer | undefined => {
     communityVotes: raw.offerLikes,
     publishedAt: raw.offerPublished,
     priceError: looksLikePriceError(title),
-    appOnly: isAppOnlyOffer(raw.offerTags),
+    appOnly: isAppOnly(raw.offerTags),
     // Promocoes garimpadas pela comunidade valem por si, nao pela palavra-chave.
     curated: true
   };
@@ -181,15 +169,42 @@ const pickCategories = (keywords: string[]): SearchTaskSpec[] => {
   }));
 };
 
+/** Marca a consulta que vai para a busca, e nao para uma secao do site. */
+const SEARCH_PREFIX = "q:";
+
+const searchTasks = (keywords: string[]): SearchTaskSpec[] =>
+  keywords
+    .map((keyword) => keyword.trim())
+    .filter(Boolean)
+    .map((keyword) => ({
+      query: `${SEARCH_PREFIX}${keyword}`,
+      label: `${PROVIDER_NAME}: ${keyword}`
+    }));
+
 export const promobitProvider: SearchProvider = {
   key: "promobit",
   name: PROVIDER_NAME,
   kind: "curator",
   availableOnWeb: true,
+  /**
+   * Cada tag vira uma busca de verdade no acervo do site. As secoes continuam
+   * sendo lidas por outro motivo: elas trazem a garimpagem da comunidade, que
+   * vale por si e nao depende de voce ter adivinhado a palavra certa.
+   */
   buildTasks: (keywords) => [
+    ...searchTasks(keywords),
     ...pickCategories(keywords),
     { query: DEALS_CATEGORY, label: `${PROVIDER_NAME}: maiores descontos` },
     { query: COUPONS_TASK, label: `${PROVIDER_NAME}: cupons` }
   ],
-  search: (query) => (query === COUPONS_TASK ? fetchCoupons() : fetchCategory(query))
+  // Busca dirigida nao passa pelas secoes: quem procura um produto nao quer a
+  // vitrine do dia junto.
+  buildFocusTasks: (term) => searchTasks([term]),
+  search: (query) => {
+    if (query.startsWith(SEARCH_PREFIX)) {
+      return searchPromobit(query.slice(SEARCH_PREFIX.length));
+    }
+
+    return query === COUPONS_TASK ? fetchCoupons() : fetchCategory(query);
+  }
 };

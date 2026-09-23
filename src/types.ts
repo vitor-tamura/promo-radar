@@ -149,4 +149,6 @@ export type ScanOutcome = {
   providers: ProviderResult[];
   /** True quando nenhuma fonte respondeu e o app caiu no catalogo de demonstracao. */
   usedFallback: boolean;
+  /** Produto pesquisado, quando a varredura foi dirigida pela lupa. */
+  focusTerm?: string;
 };
